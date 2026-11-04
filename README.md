@@ -4,16 +4,19 @@ A sleek couch-mode launcher for your RetroArch games on Windows. Cinder's cousin
 
 Relic reads what RetroArch already knows (its playlists, cores and thumbnails) and launches games through your installed RetroArch. It never changes RetroArch's own files.
 
-## Features (0.1)
+## Features
 
 - **Couch first**: opens full screen, driven by a controller. D-pad or stick moves (hold to scroll faster), **A** plays, **X** favorites, **Y** opens game options, **LB/RB** jump between systems, **Select** changes the sort, **Start** opens settings, **B** goes back. Mouse and keyboard work too.
 - **Your systems up front**: a row of system tiles (SNES, Genesis, PlayStation…) with game counts, then **Continue playing** and **Favorites**.
+- **Fast with big libraries**: the library is kept on disk, so Relic opens instantly and rescans quietly in the background, updating the screen if something changed. Shelves with thousands of games open in a blink, and moving stays instant.
+- **Find games quickly**: **LT/RT** (Page Up/Down) jump a shelf by letter. **Select** at home is *Surprise me*, a random pick nudged toward games you haven't played much. A *Recently added* row shows new games.
 - **Box art shelves**: each system gets a shelf of covers shaped like that system's boxes, with the focused game's screenshot blurred behind.
 - **Box art from**: your own picture, RetroArch's thumbnails folder, or the libretro thumbnails server. It matches loosely, so `Super Mario World.sfc` still finds `Super Mario World (USA)`. Art is cached in `%APPDATA%\Relic\art`.
 - **Library from**: every RetroArch playlist, plus any ROM folders you add. Name subfolders after the system (`SNES`, `Genesis`, `PS1`…) or keep one mixed folder (Relic sorts by file type). Multi-disc games with a `.m3u` show once.
-- **Cores**: Relic picks the best installed core per system (Snes9x, Genesis Plus GX, SwanStation, mGBA…). You can change it per game with **Y → Core**. If a core is missing, Relic tells you which one to download.
+- **Cores**: Relic picks the best installed core per system (Snes9x, Genesis Plus GX, SwanStation, mGBA…). You can change it per game with **Y → Core**, then make that the default for the whole system. If a core is missing, Relic tells you which one to download.
 - **While you play**: Relic minimizes, records the session, and comes back when RetroArch closes. Play time and last played show on each game.
 - **Updates built in**: Relic checks GitHub when it starts and shows **Update ready** on the Settings tile. In Settings → Updates, one button downloads, verifies and installs the new version, then restarts Relic. The single-file `Relic.exe` installs itself to `%LOCALAPPDATA%\Programs\Relic` (with Start menu and Desktop shortcuts) the first time you update. A copy run from source updates with `git pull`.
+- **One copy at a time**: opening Relic again brings the open window to the front. **Settings → Quit Relic** closes it from the controller.
 - **Themes**: Relic, Arcade, Phosphor (with scanlines) and Console Gray. You can drop your own `.css` themes into `%APPDATA%\Relic\themes`.
 
 ## Run it

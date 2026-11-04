@@ -40,6 +40,28 @@ def app_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
+def activate_running_copy(ddir: Path) -> bool:
+    """If Relic is already open, bring its window up and return True."""
+    import json
+    import urllib.request
+    try:
+        info = json.loads((ddir / "instance.json").read_text(encoding="utf-8"))
+        req = urllib.request.Request(f"http://127.0.0.1:{int(info['port'])}/api/activate", data=b"{}",
+                                     headers={"X-Relic-Token": info["token"], "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=2) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def _write_instance(ddir: Path, port: int, token: str) -> None:
+    import json
+    try:
+        (ddir / "instance.json").write_text(json.dumps({"port": port, "token": token}), encoding="utf-8")
+    except OSError:
+        pass
+
+
 def launch_installed_instead() -> bool:
     """The single-file Relic.exe: if the faster installed version is there, open that instead."""
     if not install.is_frozen() or install.is_folder_build():
@@ -127,6 +149,9 @@ def main() -> None:
 
     ddir = data_dir()
     setup_log(ddir)
+    if not args.browser and activate_running_copy(ddir):
+        log.info("already running; brought the existing window up")
+        return
     if launch_installed_instead():
         log.info("opened the installed version instead of this single-file copy")
         return
@@ -151,8 +176,8 @@ def main() -> None:
     if args.migrated_from:
         _remove_old_single_file(args.migrated_from)
     ra = RetroArch(cfg["retroarch_path"] or None)
-    library = Library(ra, cfg)
-    threading.Thread(target=library.games, daemon=True).start()  # warm up while the window opens
+    library = Library(ra, cfg, ddir / "library.json")
+    library.start()  # last time's library at once; rescans in the background
     meta, sessions = GameMeta(ddir), Sessions(ddir)
     res = resource_dir()
     window_api = None if args.browser else WindowApi()
@@ -163,17 +188,22 @@ def main() -> None:
             window_api._window.minimize()
             tucked["on"] = True
 
+    def show_window():
+        if not (window_api and window_api._window):
+            return
+        try:
+            window_api._window.restore()
+            window_api._window.show()
+            if IS_WIN and window_api._snap.hwnd():
+                import ctypes
+                ctypes.windll.user32.SetForegroundWindow(window_api._snap.hwnd())
+        except Exception:
+            log.exception("couldn't bring the window back")
+
     def on_stop(game, seconds):
         log.info("played %s for %ds", game["title"], seconds)
-        if tucked["on"] and cfg["restore_after_play"] and window_api and window_api._window:
-            try:
-                window_api._window.restore()
-                window_api._window.show()
-                if IS_WIN and window_api._snap.hwnd():
-                    import ctypes
-                    ctypes.windll.user32.SetForegroundWindow(window_api._snap.hwnd())
-            except Exception:
-                log.exception("couldn't bring the window back")
+        if tucked["on"] and cfg["restore_after_play"]:
+            show_window()
         tucked["on"] = False
 
     restart_requested = threading.Event()
@@ -195,7 +225,7 @@ def main() -> None:
     ctx = Context(token=secrets.token_urlsafe(24), ra=ra, library=library, art=Art(ddir, ra, cfg),
                   config=cfg, meta=meta, sessions=sessions, player=player,
                   ui_dir=res / "ui", theme_dirs=[res / "themes", ddir / "themes"], data_dir=ddir,
-                  window_api=window_api, updater=updater, restart=restart)
+                  window_api=window_api, updater=updater, restart=restart, activate=lambda: show_window())
     srv = make_server(ctx, args.port)
     url = f"http://127.0.0.1:{srv.server_address[1]}/"
 
@@ -211,6 +241,7 @@ def main() -> None:
         return
 
     threading.Thread(target=srv.serve_forever, daemon=True).start()
+    _write_instance(ddir, srv.server_address[1], ctx.token)
     import webview
 
     window = webview.create_window(
@@ -222,6 +253,10 @@ def main() -> None:
     if cfg["start_fullscreen"] and not args.windowed:
         window.events.shown += lambda: threading.Timer(0.3, lambda: window_api.fullscreen(True)).start()
     webview.start(private_mode=False, storage_path=str(ddir / "webview"))
+    try:
+        (ddir / "instance.json").unlink()
+    except OSError:
+        pass
     srv.shutdown()
     if restart_requested.is_set():
         log.info("restarting for the update")

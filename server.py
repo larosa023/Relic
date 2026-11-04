@@ -29,13 +29,14 @@ def list_themes(dirs: list[Path]) -> list[dict]:
 
 class Context:
     def __init__(self, *, token, ra, library, art, config, meta, sessions, player,
-                 ui_dir, theme_dirs, data_dir, window_api=None, updater=None, restart=None):
+                 ui_dir, theme_dirs, data_dir, window_api=None, updater=None, restart=None, activate=None):
         self.token, self.ra, self.library, self.art = token, ra, library, art
         self.config, self.meta, self.sessions, self.player = config, meta, sessions, player
         self.ui_dir, self.theme_dirs, self.data_dir = ui_dir, theme_dirs, data_dir
         self.window_api = window_api
         self.updater = updater
         self.restart = restart or (lambda: None)
+        self.activate = activate or (lambda: None)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -130,7 +131,7 @@ class Handler(BaseHTTPRequestHandler):
             g = c.library.get(m[1])
             s = g and c.library.system(g["system"])
             p = c.art.find(g, s.db, m[2]) if g and s else None
-            return self._file(p, "max-age=3600") if p else self._send(404, b"", "text/plain", "max-age=120")
+            return self._file(p, "max-age=604800") if p else self._send(404, b"", "text/plain", "max-age=300")
 
         if not path.startswith("/api/"):
             return self._send(404, b"not found", "text/plain")
@@ -141,8 +142,12 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/update":
             return self._json(c.updater.snapshot() if c.updater else {})
         if path == "/api/library":
-            refresh = parse_qs(parts.query).get("refresh") == ["1"]
-            return self._json(self._library(refresh))
+            q = parse_qs(parts.query)
+            if "rev" in q:  # wait for the background rescan to change something
+                rev = int(q["rev"][0] or 0)
+                if c.library.wait(rev) == rev:
+                    return self._json({"ok": True, "unchanged": True, "rev": rev})
+            return self._json(self._library())
         return self._json({"ok": False, "error": "unknown"}, 404)
 
     def _state(self) -> dict:
@@ -166,14 +171,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def _library(self, refresh=False) -> dict:
         c = self.ctx
-        games = c.library.games(refresh)
+        if refresh:
+            c.library.refresh()
+        games = c.library.games()
         totals = c.sessions.totals()
         out = []
         for g in games:
             m = c.meta.get(g["id"])
             t = totals.get(g["id"], {})
             out.append({k: g[k] for k in ("id", "title", "label", "sort", "system", "region", "source")} | {
-                "file": Path(g["path"]).name,
+                "added": g.get("added", 0),
                 "favorite": bool(m.get("favorite")),
                 "hidden": bool(m.get("hidden")),
                 "rating": m.get("rating", 0),
@@ -182,7 +189,7 @@ class Handler(BaseHTTPRequestHandler):
                 "last": t.get("last", 0),
                 "plays": t.get("plays", 0),
             })
-        return {"games": out, "systems": c.library.systems_public()}
+        return {"games": out, "systems": c.library.systems_public(), "rev": c.library.rev}
 
     # -- POST -----------------------------------------------------------------
     def do_POST(self):
@@ -200,7 +207,7 @@ class Handler(BaseHTTPRequestHandler):
                 if c.config["retroarch_path"] != before["retroarch_path"]:
                     c.ra.find(c.config["retroarch_path"] or None)
                 if any(c.config[k] != v for k, v in before.items()):
-                    c.library.games(refresh=True)
+                    c.library.refresh()
                 return self._json({"ok": True, "config": c.config.public()})
             if path == "/api/meta":
                 g = c.library.get(str(body.get("id", "")))
@@ -217,8 +224,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._update(body.get("action"))
             if path == "/api/customart":
                 return self._custom_art(body)
-            if path == "/api/window":
-                return self._window(body)
+            if path == "/api/activate":  # a second copy of Relic was opened: show this one
+                c.activate()
+                return self._json({"ok": True})
             if path == "/api/log":
                 log.info("page: %s", str(body.get("msg", ""))[:500])
                 return self._json({"ok": True})
@@ -273,17 +281,6 @@ class Handler(BaseHTTPRequestHandler):
             raise RuntimeError("Pick a PNG, JPG or WebP picture.")
         c.art.set_custom(g["id"], kind, src.read_bytes(), ".jpg" if src.suffix.lower() == ".jpeg" else src.suffix.lower())
         return self._json({"ok": True})
-
-    def _window(self, body):
-        w = self.ctx.window_api
-        if not w:
-            return self._json({"ok": True, "result": None})
-        act = body.get("action")
-        if act == "pick_folder":
-            return self._json({"ok": True, "result": w.pick_folder()})
-        if act == "pick_image":
-            return self._json({"ok": True, "result": w.pick_file("image")})
-        return self._json({"ok": False, "error": "unknown"}, 404)
 
 
 def make_server(ctx: Context, port: int = 0) -> ThreadingHTTPServer:

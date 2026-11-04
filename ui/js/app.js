@@ -20,7 +20,7 @@ async function loadState() {
 }
 async function loadLibrary(refresh = false) {
   const r = refresh ? await R.api("/api/rescan", {}) : await R.api("/api/library");
-  S.games = r.games; S.systems = r.systems;
+  S.games = r.games; S.systems = r.systems; S.rev = r.rev;
   S.byId = Object.fromEntries(S.games.map((g) => [g.id, g]));
   S.sysById = Object.fromEntries(S.systems.map((s) => [s.id, s]));
 }
@@ -72,6 +72,9 @@ function renderHome(focusKey) {
   const rows = [];
   const recent = games.filter((g) => g.last).sort((a, b) => b.last - a.last).slice(0, 14);
   if (recent.length) rows.push(["Continue playing", "recent", recent]);
+  const newest = games.filter((g) => g.added).sort((a, b) => b.added - a.added);
+  // Only worth a row when games arrived at different times (not one big import).
+  if (newest.length > 6 && newest[0].added - newest[Math.min(13, newest.length - 1)].added > 3600) rows.push(["Recently added", "new", newest.slice(0, 14)]);
   const favs = games.filter((g) => g.favorite).sort((a, b) => a.sort.localeCompare(b.sort));
   if (favs.length) rows.push(["Favorites", "fav", favs]);
   if (!recent.length && games.length) {
@@ -103,9 +106,10 @@ function sortGames(list) {
   return [...list].sort((a, b) => (b.favorite - a.favorite) || by(a, b));
 }
 
-function openShelf(sid, focusId) {
+function openShelf(sid, focusId, keepScroll = false) {
   const s = S.sysById[sid];
   if (!s) return renderHome();
+  const scroll = keepScroll && shelfSys === sid ? $("#shelf").scrollTop : 0;
   shelfSys = sid;
   const games = sortGames(visibleGames().filter((g) => g.system === sid));
   $("#shelf-maker").textContent = `${s.maker}${s.year ? ` · ${s.year}` : ""}`;
@@ -113,10 +117,52 @@ function openShelf(sid, focusId) {
   $("#shelf-count").textContent = `${games.length} game${games.length === 1 ? "" : "s"}`;
   $("#shelf-sort").textContent = SORT_LABEL[S.config.shelf_sort] || "A–Z";
   $("#shelf").style.setProperty("--sys", R.sysColor(sid));
-  $("#grid").innerHTML = games.map((g) => card(g, `shelf:${g.id}`)).join("");
+  // Big shelves: show the first screenfuls now and the rest a frame later, so opening feels instant.
+  const at = focusId ? games.findIndex((g) => g.id === focusId) : 0;
+  const first = Math.max(150, at + 60);
+  const grid = $("#grid");
+  const token = (grid.dataset.token = String(Math.random()));
+  grid.innerHTML = games.slice(0, first).map((g) => card(g, `shelf:${g.id}`)).join("");
+  if (games.length > first) requestAnimationFrame(() => setTimeout(() => {
+    if (grid.dataset.token !== token) return;  // you've already moved on
+    grid.insertAdjacentHTML("beforeend", games.slice(first).map((g) => card(g, `shelf:${g.id}`)).join(""));
+  }, 0));
   show("shelf");
-  $("#grid").scrollTop = 0;
-  R.nav.focus((focusId && $(`[data-game="${focusId}"]`, $("#grid"))) || $("#grid [data-nav]"));
+  $("#shelf").scrollTop = scroll;
+  R.nav.focus((focusId && $(`[data-game="${focusId}"]`, $("#grid"))) || $("#grid [data-nav]"), { scroll: !keepScroll });
+}
+
+/** LT/RT on a shelf: jump to the next or previous starting letter (or ten games, when not sorted A–Z). */
+const firstLetter = (g) => g.favorite ? "★" : (/[a-z]/.test(g.sort[0] || "") ? g.sort[0].toUpperCase() : "#");
+function letterJump(d) {
+  const cards = $$("#grid .card");
+  const i = cards.indexOf(R.nav.cur);
+  if (i < 0) return;
+  const byTitle = (S.config.shelf_sort || "title") === "title";
+  let j = i;
+  if (byTitle) {
+    const L = (k) => firstLetter(S.byId[cards[k].dataset.game]);
+    const cur = L(i);
+    if (d > 0) { while (j < cards.length && L(j) === cur) j++; }
+    else {
+      while (j > 0 && L(j - 1) === cur) j--;          // start of this letter
+      if (j === i && j > 0) { j--; const prev = L(j); while (j > 0 && L(j - 1) === prev) j--; }
+    }
+  } else j = i + d * 10;
+  j = Math.max(0, Math.min(cards.length - 1, j));
+  if (j === i) return R.sound("bump");
+  R.sound("move");
+  R.nav.focus(cards[j]);
+  if (byTitle) showLetter(firstLetter(S.byId[cards[j].dataset.game]));
+}
+
+let letterTimer = 0;
+function showLetter(ch) {
+  const el = $("#letter");
+  el.textContent = ch;
+  el.classList.remove("on"); void el.offsetWidth; el.classList.add("on");
+  clearTimeout(letterTimer);
+  letterTimer = setTimeout(() => el.classList.remove("on"), 700);
 }
 
 function shelfStep(d) {
@@ -176,8 +222,8 @@ function showInfo(el) {
 }
 
 // ---------- hints ----------
-const GLYPH = { a: "A", b: "B", x: "X", y: "Y", lb: "LB", rb: "RB", start: "☰", select: "⧉" };
-const KEYCAP = { a: "Enter", b: "Esc", x: "F", y: "Tab", lb: "Q", rb: "E", start: ",", select: "S" };
+const GLYPH = { a: "A", b: "B", x: "X", y: "Y", lb: "LB", rb: "RB", lt: "LT", rt: "RT", start: "☰", select: "⧉" };
+const KEYCAP = { a: "Enter", b: "Esc", x: "F", y: "Tab", lb: "Q", rb: "E", lt: "PgUp", rt: "PgDn", start: ",", select: "S" };
 function hints() {
   const pad = R.nav.usingPad || document.body.classList.contains("has-pad");
   const cap = (bs) => bs.split("+").map((b) => pad ? `<b class="g g-${b}">${GLYPH[b]}</b>` : `<b class="k">${KEYCAP[b]}</b>`).join("");
@@ -189,7 +235,8 @@ function hints() {
   else {
     list.push(["a", onGame ? "Play" : "Open"]);
     if (onGame) list.push(["x", "Favorite"], ["y", "Options"]);
-    if (screen === "shelf") list.push(["lb+rb", "System"], ["select", "Sort"], ["b", "Back"]);
+    if (screen === "shelf") list.push(["lb+rb", "System"], ["lt+rt", "Jump"], ["select", "Sort"], ["b", "Back"]);
+    if (screen === "home" && S.games.length) list.push(["select", "Surprise me"]);
     list.push(["start", "Settings"]);
   }
   $("#hints").innerHTML = list.map(([b, t]) => `<span class="hint-i">${cap(b)}${t ? `<span>${esc(t)}</span>` : ""}</span>`).join("");
@@ -244,14 +291,24 @@ async function toggleFav(g, el) {
   if (screen === "shelf") showInfo(el);
 }
 
+/** Select at home: a random game, nudged toward ones you haven't played much. */
+function surprise() {
+  const pool = visibleGames();
+  if (!pool.length) return R.sound("bump");
+  const weights = pool.map((g) => (g.favorite ? 2 : 1) * (g.played ? 1 / (1 + g.played / 3600) : 3));
+  let r = Math.random() * weights.reduce((a, b) => a + b, 0), g = pool[0];
+  for (let i = 0; i < pool.length; i++) { r -= weights[i]; if (r <= 0) { g = pool[i]; break; } }
+  openPop(g, true);
+}
+
 // ---------- game options (Y) ----------
-let popGame = null, popReturn = null;
-function openPop(g) {
-  popGame = g; popReturn = R.nav.cur;
+let popGame = null, popReturn = null, popSurprise = false;
+function openPop(g, surprised = false) {
+  popGame = g; popReturn = popReturn && !$("#game-pop").hidden ? popReturn : R.nav.cur; popSurprise = surprised;
   const s = S.sysById[g.system];
   $("#pop-art").style.cssText = `--sys:${R.sysColor(g.system)};aspect-ratio:${R.boxRatio(g.system)}`;
   $("#pop-art").innerHTML = `${placeholder(g)}<img alt="" src="${art(g)}?t=${Date.now()}" onload="this.parentNode.classList.add('has-art')" onerror="this.remove()">`;
-  $("#pop-sys").textContent = s ? s.name : "";
+  $("#pop-sys").textContent = (surprised ? "Surprise · " : "") + (s ? s.name : "");
   $("#pop-title").textContent = g.title;
   const meta = [g.region, R.playtime(g.played), g.plays ? `${g.plays} session${g.plays === 1 ? "" : "s"}` : "", g.last ? `last played ${R.ago(g.last)}` : ""].filter(Boolean);
   $("#pop-meta").innerHTML = meta.map(esc).join(" · ") + `<div class="pop-file">${esc(g.label)}</div>`;
@@ -275,6 +332,8 @@ function renderPopActions(focusDo) {
     ["play", "▶  Play"],
     ["fav", g.favorite ? "★  Remove from favorites" : "☆  Add to favorites"],
     ["core", `Core: ${coreLabel(g)}`],
+    ...(g.core && g.core !== (S.config.system_cores || {})[g.system] ? [["core-all", `Use this core for every ${(S.sysById[g.system] || {}).name || ""} game`]] : []),
+    ...(popSurprise ? [["again", "↻  Surprise me again"]] : []),
     ...(S.native ? [["art", "Set box art…"]] : []),
     ["hide", "Hide this game"],
   ].map(([d, t]) => `<button class="btn wide" data-nav data-do="pop-${d}">${esc(t)}</button>`).join("");
@@ -282,6 +341,7 @@ function renderPopActions(focusDo) {
 }
 function closePop() {
   $("#game-pop").hidden = true;
+  if (pendingRefresh) setTimeout(refreshView, 0);
   const back = popReturn && document.body.contains(popReturn) ? popReturn : null;
   popGame = null;
   if (back) R.nav.focus(back, { scroll: false });
@@ -371,6 +431,9 @@ function renderSettings(focusDo) {
     `<button class="btn theme${t.id === S.config.theme ? " on" : ""}" data-nav data-do="theme" data-id="${t.id}">
       <span class="sw">${(t.swatch || []).map((c) => `<i style="background:${esc(c)}"></i>`).join("")}</span>${esc(t.name)}</button>`).join("");
   $("#ver").textContent = S.version;
+  const hidden = S.games.filter((g) => g.hidden).length;
+  $("#set-extra").innerHTML = (hidden ? `<button class="btn" data-nav data-do="unhide">Show ${hidden} hidden game${hidden === 1 ? "" : "s"} again</button>` : "")
+    + (S.native ? `<button class="btn" data-nav data-do="quit">Quit Relic</button>` : "");
   renderUpdate();
   if (focusDo) {
     const el = typeof focusDo === "string" ? $(focusDo, $("#settings")) : null;
@@ -458,6 +521,12 @@ async function doAction(el) {
       applyTheme(el.dataset.id);
       return renderSettings(`[data-id="${el.dataset.id}"]`);
     }
+    if (d === "unhide") {
+      for (const g of S.games.filter((x) => x.hidden)) await setMeta(g, { hidden: false });
+      R.toast("Hidden games are back");
+      return renderSettings('[data-do="rescan"]');
+    }
+    if (d === "quit") { const api = R.native(); return api && api.close(); }
     if (d === "upd-check") {
       setUpdate({ ...(S.update || {}), busy: true, phase: "Checking", progress: null });
       const r = await R.api("/api/update", { action: "check" });
@@ -476,6 +545,13 @@ async function doAction(el) {
     if (d === "pop-play") { closePop(); return launch(g); }
     if (d === "pop-fav") { await toggleFav(g, popReturn); return renderPopActions("fav"); }
     if (d === "pop-core") return cycleCore(g);
+    if (d === "pop-core-all") {
+      await R.setConfig({ system_cores: { ...(S.config.system_cores || {}), [g.system]: g.core } });
+      await setMeta(g, { core: "" });
+      R.toast(`Every ${(S.sysById[g.system] || {}).name} game now uses ${coreLabel(g).replace(/^Automatic \((.*)\)$/, "$1")}`);
+      return renderPopActions("core");
+    }
+    if (d === "pop-again") return surprise();
     if (d === "pop-art") {
       const api = R.native();
       const p = api && (await api.pick_file("image"));
@@ -516,6 +592,7 @@ R.nav.on((btn) => {
   if (btn === "y" && g) { openPop(g); return true; }
   if (screen === "shelf") {
     if (btn === "b") { R.sound("back"); renderHome(lastHomeFocus || `sys:${shelfSys}`); return true; }
+    if (btn === "lt" || btn === "rt") { letterJump(btn === "lt" ? -1 : 1); return true; }
     if (btn === "lb") { shelfStep(-1); return true; }
     if (btn === "rb") { shelfStep(1); return true; }
     if (btn === "select") {
@@ -528,6 +605,7 @@ R.nav.on((btn) => {
       return true;
     }
   }
+  if (screen === "home" && btn === "select") { surprise(); return true; }
   if (screen === "home" && (btn === "lb" || btn === "rb")) {
     // Jump between rows quickly.
     R.nav.move(btn === "lb" ? "up" : "down");
@@ -579,12 +657,35 @@ function tick() {
   $("#clock").textContent = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
+// ---------- live library: rescans happen in the background; show what changed ----------
+let pendingRefresh = false;
+async function watchLibrary() {
+  for (;;) {
+    try {
+      const r = await R.api(`/api/library?rev=${S.rev || 0}`);
+      if (!r.unchanged) {
+        S.games = r.games; S.systems = r.systems; S.rev = r.rev;
+        S.byId = Object.fromEntries(S.games.map((g) => [g.id, g]));
+        S.sysById = Object.fromEntries(S.systems.map((s) => [s.id, s]));
+        refreshView();
+      }
+    } catch (e) { await new Promise((ok) => setTimeout(ok, 5000)); }
+  }
+}
+function refreshView() {
+  if (!$("#game-pop").hidden || !$("#launching").hidden) { pendingRefresh = true; return; }
+  pendingRefresh = false;
+  const cur = R.nav.cur;
+  if (screen === "home") renderHome(cur && cur.dataset.key);
+  else if (screen === "shelf") openShelf(shelfSys, cur && cur.dataset.game, true);
+  else if (screen === "settings") renderSettings();
+}
+
 // ---------- start ----------
 async function start() {
   tick(); setInterval(tick, 15000);
   try {
-    await loadState();
-    await loadLibrary();
+    await Promise.all([loadState(), loadLibrary()]);
   } catch (e) {
     R.toast(`Couldn't load your library: ${e.message}`, true);
   }
@@ -593,6 +694,7 @@ async function start() {
     if (S.config.start_fullscreen) document.body.classList.add("fullscreen");
   }
   renderHome();
+  watchLibrary();
   // Relic checks GitHub in the background as it starts; pick up the answer.
   setTimeout(async () => {
     try {

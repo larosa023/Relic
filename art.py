@@ -11,6 +11,7 @@ Looked for in this order, and cached in %APPDATA%\\Relic\\art:
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
 import time
@@ -65,6 +66,7 @@ class Art:
         self._net = threading.Semaphore(4)
         self._index: dict[str, dict[str, list[str]]] = {}
         self._index_locks: dict[str, threading.Lock] = {}
+        self._local_idx: dict[str, dict[str, str]] = {}
 
     # ------------------------------------------------------------- public
     def find(self, game: dict, db: str, kind: str = "boxart") -> Path | None:
@@ -106,6 +108,7 @@ class Art:
         (self.custom / f"{gid}_{kind}{ext}").write_bytes(data)
 
     def forget_misses(self) -> None:
+        self._local_idx = {}
         with self._lock:
             self._misses = {}
             self._misses_path.unlink(missing_ok=True)
@@ -119,12 +122,20 @@ class Art:
         p = folder / (thumb_name(label) + ".png")
         if p.is_file():
             return p
-        if folder.is_dir():  # loose match against what's on disk
-            want = _key(label)
-            for f in folder.glob("*.png"):
-                if _key(f.stem) == want:
-                    return f
-        return None
+        # Loose match against what's on disk; the folder is listed once, not on every request.
+        key = str(folder)
+        idx = self._local_idx.get(key)
+        if idx is None:
+            idx = {}
+            try:
+                for f in os.scandir(folder):
+                    if f.name.lower().endswith(".png"):
+                        idx.setdefault(_key(f.name[:-4]), f.path)
+            except OSError:
+                pass
+            self._local_idx[key] = idx
+        hit = idx.get(_key(label))
+        return Path(hit) if hit else None
 
     def _download(self, label: str, db: str, kind: str) -> bytes | None:
         base = f"{SERVER}/{urllib.parse.quote(db)}/{KINDS[kind]}/"

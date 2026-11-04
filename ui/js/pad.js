@@ -2,17 +2,19 @@
 
    Buttons: up down left right a b x y lb rb start select
    Gamepad (standard mapping): D-pad or left stick moves (hold to repeat, faster the longer you hold),
-   A select · B back · X favorite · Y options · LB/RB previous/next system · Start settings · Select sort
-   Keyboard: arrows, Enter, Esc/Backspace, F (X), Tab or I (Y), Q/E (LB/RB), S (Select), comma (Start)
+   A select · B back · X favorite · Y options · LB/RB previous/next system · LT/RT jump by letter
+   Start settings · Select sort (on a shelf) or surprise me (at home)
+   Keyboard: arrows, Enter, Esc/Backspace, F (X), Tab or I (Y), Q/E (LB/RB), PageUp/PageDown (LT/RT),
+   S (Select), comma (Start)
    Controller presses only count while Relic is the window in front. */
 (() => {
 "use strict";
 const { $$ } = R;
 const N = (R.nav = { cur: null, handlers: [], usingPad: false });
-const BTN = { 0: "a", 1: "b", 2: "x", 3: "y", 4: "lb", 5: "rb", 8: "select", 9: "start", 12: "up", 13: "down", 14: "left", 15: "right" };
+const BTN = { 0: "a", 1: "b", 2: "x", 3: "y", 4: "lb", 5: "rb", 6: "lt", 7: "rt", 8: "select", 9: "start", 12: "up", 13: "down", 14: "left", 15: "right" };
 const KEY = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right", Enter: "a", " ": "a",
   Escape: "b", Backspace: "b", f: "x", F: "x", Tab: "y", i: "y", I: "y", q: "lb", Q: "lb", e: "rb", E: "rb",
-  s: "select", S: "select", ",": "start" };
+  s: "select", S: "select", ",": "start", PageUp: "lt", PageDown: "rt" };
 const DIRS = new Set(["up", "down", "left", "right"]);
 
 /** Handlers get (button) and return true if they used it. Newest first. */
@@ -43,14 +45,30 @@ N.focus = (el, { scroll = true, quiet = false } = {}) => {
       const target = el.offsetLeft - rail.clientWidth * 0.12;
       rail.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
     }
-    el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+    // Glide to nearby items; jump straight to far ones (a letter jump shouldn't scroll for a second).
+    const r = el.getBoundingClientRect();
+    const far = r.bottom < -innerHeight * 0.5 || r.top > innerHeight * 1.5;
+    el.scrollIntoView({ block: far ? "center" : "nearest", inline: "nearest", behavior: far ? "auto" : "smooth" });
   }
   if (!quiet) document.dispatchEvent(new CustomEvent("relic:focus", { detail: el }));
 };
 
 /** The nearest item in a direction, preferring ones lined up with the current one. */
+/** Candidates for a move. In a big grid or rail only the neighbours nearby are measured, so moving
+    stays instant with thousands of games. */
+function nearby() {
+  const scope = N.scope();
+  const box = N.cur && N.cur.closest(".grid, .rail");
+  if (!box || !scope.contains(box) || box.children.length < 120) return N.items();
+  const kids = [...box.children];
+  const i = kids.indexOf(N.cur);
+  const near = kids.slice(Math.max(0, i - 60), i + 61);
+  const rest = $$("[data-nav]", scope).filter((el) => !box.contains(el) && visible(el));
+  return near.concat(rest);
+}
+
 N.move = (dir) => {
-  const items = N.items();
+  const items = N.cur && document.body.contains(N.cur) ? nearby() : N.items();
   if (!items.length) return;
   if (!N.cur || !items.includes(N.cur)) return N.focus(items[0]);
   const a = N.cur.getBoundingClientRect();

@@ -22,8 +22,10 @@ button { font: inherit; color: inherit; }
 
 /* ---------- backdrop ---------- */
 #backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
-.bd-img { position: absolute; inset: -6%; background: center/cover no-repeat; filter: blur(28px) saturate(1.25) brightness(.55);
-  opacity: 0; transition: opacity .7s ease; transform: scale(1.06); }
+/* Drawn at a quarter of the screen and scaled up: the blur costs a sixteenth as much and looks the same. */
+.bd-img { position: absolute; left: -2%; top: -2%; width: 26%; height: 26%; background: center/cover no-repeat;
+  filter: blur(7px) saturate(1.25) brightness(.55); opacity: 0; transition: opacity .7s ease;
+  transform: scale(4.15); transform-origin: 0 0; will-change: opacity; }
 .bd-img.on { opacity: .85; }
 .bd-shade { position: absolute; inset: 0;
   background:
@@ -85,6 +87,8 @@ button { font: inherit; color: inherit; }
 /* ---------- game cards ---------- */
 .card { flex: 0 0 auto; width: calc(var(--card-h) * var(--ar, .72)); position: relative; cursor: pointer;
   transition: transform .18s cubic-bezier(.2,.8,.3,1.2); }
+/* Big shelves: the browser skips laying out and painting covers that are off screen. */
+.grid .card { content-visibility: auto; contain-intrinsic-size: auto calc(var(--card-h) * var(--ar, .72)) calc(var(--card-h) + 2.2em); }
 .cover { height: var(--card-h); border-radius: var(--radius); overflow: hidden; position: relative;
   background: color-mix(in srgb, var(--sys) 18%, var(--surface)); box-shadow: 0 calc(var(--u) * .3) calc(var(--u) * 1) rgba(0,0,0,.45);
   transition: box-shadow .18s; }
@@ -94,7 +98,7 @@ button { font: inherit; color: inherit; }
 .cap { margin-top: .55em; font-size: .86em; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   color: var(--dim); transition: color .15s; }
 .card .star { position: absolute; top: .45em; right: .45em; width: 1.7em; height: 1.7em; border-radius: 50%; display: none;
-  place-items: center; background: rgba(0,0,0,.65); color: var(--accent); font-size: .8em; backdrop-filter: blur(4px); }
+  place-items: center; background: rgba(0,0,0,.7); color: var(--accent); font-size: .8em; }
 .card.fav .star { display: grid; }
 .card.focus { transform: scale(1.06) translateY(-2%); z-index: 2; }
 .card.focus .cover { box-shadow: 0 0 0 3px var(--bg), 0 0 0 calc(3px + .18em) var(--accent), 0 0 calc(var(--u) * 2.2) var(--glow), 0 calc(var(--u) * 1) calc(var(--u) * 2.6) rgba(0,0,0,.7); }
@@ -171,8 +175,8 @@ button { font: inherit; color: inherit; }
 .badge { display: inline-block; padding: .15em .6em; border-radius: 99px; background: var(--accent); color: var(--accent-text); font-weight: 700; font-size: .9em; }
 
 /* ---------- game options ---------- */
-.overlay { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: rgba(0,0,0,.6);
-  backdrop-filter: blur(10px); animation: fade .18s ease; }
+.overlay { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: rgba(0,0,0,.72);
+  animation: fade .18s ease; }
 .pop { display: flex; gap: calc(var(--u) * 2); width: min(92vw, calc(var(--u) * 46)); padding: calc(var(--u) * 1.8);
   border-radius: calc(var(--radius) * 1.6); background: color-mix(in srgb, var(--surface) 94%, transparent); border: 1px solid var(--border);
   box-shadow: 0 calc(var(--u) * 2) calc(var(--u) * 5) rgba(0,0,0,.6); }
@@ -195,13 +199,21 @@ button { font: inherit; color: inherit; }
 .hint-i b.k { border-radius: 5px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); font-weight: 600; }
 .g-a { background: #2f9e4f !important; } .g-b { background: #c8433a !important; } .g-x { background: #2f6fd1 !important; } .g-y { background: #d1a21f !important; color: #1b1408 !important; }
 
+/* the big letter when jumping with LT/RT */
+#letter { position: fixed; left: 50%; top: 50%; z-index: 15; transform: translate(-50%, -50%) scale(.9); pointer-events: none;
+  width: calc(var(--u) * 7); height: calc(var(--u) * 7); border-radius: calc(var(--radius) * 2); display: grid; place-items: center;
+  font-size: calc(var(--u) * 4); font-weight: 800; background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 2px solid var(--accent); color: var(--accent); box-shadow: 0 0 calc(var(--u) * 3) var(--glow);
+  opacity: 0; transition: opacity .25s, transform .25s; }
+#letter.on { opacity: 1; transform: translate(-50%, -50%) scale(1); transition: none; }
+
 /* ---------- toast, launching ---------- */
 #toast { position: fixed; left: 50%; top: calc(var(--u) * 5); transform: translateX(-50%); z-index: 20; padding: .75em 1.3em;
   border-radius: 99px; background: var(--surface-2); border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,.5);
   font-weight: 600; max-width: 80vw; text-align: center; animation: fade .2s ease; }
 #toast.bad { border-color: #c8433a; }
 #launching { position: fixed; inset: 0; z-index: 30; display: grid; place-content: center; justify-items: center; gap: 1.2em;
-  background: rgba(0,0,0,.78); backdrop-filter: blur(14px); font-size: calc(var(--u) * 1.5); font-weight: 700; animation: fade .2s ease; }
+  background: rgba(0,0,0,.86); font-size: calc(var(--u) * 1.5); font-weight: 700; animation: fade .2s ease; }
 .spin { width: calc(var(--u) * 3); height: calc(var(--u) * 3); border-radius: 50%; border: 4px solid var(--surface-2); border-top-color: var(--accent);
   animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }

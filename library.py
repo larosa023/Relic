@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import threading
@@ -16,6 +17,7 @@ from reliclog import log
 TAGS = re.compile(r"\s*[\(\[][^\)\]]*[\)\]]")
 REGION = re.compile(r"\((USA|Europe|Japan|World|USA, Europe|Japan, USA|Korea|Brazil|Australia|France|Germany|Spain|Italy|En,[^)]*)\)", re.I)
 DISC = re.compile(r"\((Disc|Disk|CD)\s*(\d+)[^)]*\)", re.I)
+CACHE_FORMAT = 2
 SKIP_DIRS = {"bios", "system", "saves", "states", "screenshots", "thumbnails", "media", "images", "manuals"}
 
 
@@ -38,25 +40,99 @@ def _ad_hoc_system(name: str) -> System:
 
 
 class Library:
-    def __init__(self, ra, config):
+    """Builds the library and keeps it on disk, so Relic opens instantly and rescans quietly behind."""
+
+    def __init__(self, ra, config, cache_path: Path | None = None):
         self.ra = ra
         self.config = config
-        self._lock = threading.Lock()
+        self.cache_path = cache_path
+        self._lock = threading.Lock()        # guards the swap of results
+        self._build_lock = threading.Lock()  # one scan at a time
         self._games: list[dict] | None = None
+        self._by_id: dict[str, dict] = {}
         self._systems: dict[str, System] = dict(systems.BY_ID)
         self._cores: dict[str, dict] = {}
+        self._sig = ""
+        self.rev = 0                         # goes up whenever the library changes
+        self._changed = threading.Condition()
         self.scanned_at = 0.0
+
+    # ------------------------------------------------------------- loading
+    def start(self) -> None:
+        """Show last time's library straight away, then check for changes in the background."""
+        if self._load_cache():
+            threading.Thread(target=self.refresh, daemon=True).start()
+        else:
+            threading.Thread(target=self.games, daemon=True).start()
+
+    def _load_cache(self) -> bool:
+        if not self.cache_path:
+            return False
+        try:
+            data = json.loads(self.cache_path.read_text(encoding="utf-8"))
+            if data.get("format") != CACHE_FORMAT:
+                return False
+            for sid, name, db, maker in data.get("adhoc", []):
+                self._systems.setdefault(sid, System(sid, name, db, maker, 0, [], []))
+            self._swap(data["games"], data.get("cores", {}))
+            log.info("library: %d games from cache", len(data["games"]))
+            return True
+        except (OSError, ValueError, KeyError, TypeError):
+            return False
+
+    def _save_cache(self) -> None:
+        if not self.cache_path:
+            return
+        adhoc = [[s.id, s.name, s.db, s.maker] for s in self._systems.values() if s.id.startswith("pl-")]
+        data = {"format": CACHE_FORMAT, "games": self._games, "cores": self._cores, "adhoc": adhoc}
+        try:
+            tmp = self.cache_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
+            os.replace(tmp, self.cache_path)
+        except OSError:
+            log.exception("couldn't save the library cache")
+
+    def _swap(self, games: list[dict], cores: dict) -> bool:
+        sig = hashlib.sha1(json.dumps([games, sorted(cores)], sort_keys=True).encode()).hexdigest()
+        with self._lock:
+            changed = sig != self._sig
+            self._games, self._cores, self._sig = games, cores, sig
+            self._by_id = {g["id"]: g for g in games}
+        if changed:
+            with self._changed:
+                self.rev += 1
+                self._changed.notify_all()
+        return changed
+
+    def refresh(self) -> bool:
+        """Rescan now. True if anything changed."""
+        with self._build_lock:
+            t = time.time()
+            cores = self.ra.cores() if self.ra.found or self.ra.cfg_path else {}
+            games = self._build(cores)
+            changed = self._swap(games, cores)
+            self.scanned_at = time.time()
+            log.info("library: %d games, %d cores in %.2fs%s", len(games), len(cores), time.time() - t,
+                     "" if changed else " (no change)")
+            if changed or not (self.cache_path and self.cache_path.exists()):
+                self._save_cache()
+            return changed
+
+    def wait(self, rev: int, timeout: float = 25) -> int:
+        """Block until the library is newer than `rev` (or the timeout). Returns the current rev."""
+        with self._changed:
+            self._changed.wait_for(lambda: self.rev != rev, timeout)
+            return self.rev
 
     # ------------------------------------------------------------- public
     def games(self, refresh: bool = False) -> list[dict]:
-        with self._lock:
-            if self._games is None or refresh:
-                t = time.time()
-                self._cores = self.ra.cores() if self.ra.found or self.ra.cfg_path else {}
-                self._games = self._build()
-                self.scanned_at = time.time()
-                log.info("library: %d games, %d cores in %.2fs", len(self._games), len(self._cores), time.time() - t)
-            return self._games
+        if refresh or self._games is None:
+            if refresh or not self._build_lock.locked():
+                self.refresh()
+            else:
+                with self._build_lock:  # a scan is already running: wait for it
+                    pass
+        return self._games or []
 
     def system(self, sid: str) -> System | None:
         return self._systems.get(sid)
@@ -66,7 +142,8 @@ class Library:
         return self._cores
 
     def get(self, gid: str) -> dict | None:
-        return next((g for g in self.games() if g["id"] == gid), None)
+        self.games()
+        return self._by_id.get(gid)
 
     def systems_public(self) -> list[dict]:
         counts: dict[str, int] = {}
@@ -83,9 +160,9 @@ class Library:
         out.sort(key=lambda d: (order.index(d["id"]) if d["id"] in order else 999, d["name"]))
         return out
 
-    def cores_for(self, s: System) -> list[dict]:
+    def cores_for(self, s: System, cores: dict | None = None) -> list[dict]:
         """Installed cores that can run this system, best first."""
-        cores = self._cores
+        cores = self._cores if cores is None else cores
         picked = [c for c in s.cores if c in cores]
         for cid, c in sorted(cores.items()):
             if cid not in picked and s.db in c["databases"]:
@@ -117,7 +194,7 @@ class Library:
         return ""
 
     # ------------------------------------------------------------- building
-    def _build(self) -> list[dict]:
+    def _build(self, cores: dict) -> list[dict]:
         seen: dict[str, dict] = {}
         hidden_pl = set(self.config["hidden_playlists"] or [])
         for name, items in self.ra.playlists():
@@ -144,6 +221,10 @@ class Library:
         label = label or stem
         title = clean_title(label)
         region = REGION.search(label)
+        try:
+            added = int(os.stat(path.rsplit("#", 1)[0] if "#" in path and not os.path.exists(path) else path).st_mtime)
+        except OSError:
+            added = 0
         seen[gid] = {
             "id": gid,
             "title": title,
@@ -154,6 +235,7 @@ class Library:
             "core_path": core_path,
             "region": region[1] if region else "",
             "source": source,
+            "added": added,
         }
 
     def _scan_root(self, seen, root: Path):
