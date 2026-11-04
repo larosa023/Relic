@@ -165,6 +165,11 @@ button { font: inherit; color: inherit; }
 .ra-status .bad { color: #ff7a6b; font-weight: 700; }
 .ra-status .path { color: var(--dim); font-size: .85em; font-family: var(--mono); word-break: break-all; margin-top: .3em; }
 
+.ra-status .bar { height: 6px; border-radius: 99px; background: var(--surface-2); margin-top: .7em; overflow: hidden; }
+.ra-status .bar i { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+.ra-status .notes { margin-top: .7em; color: var(--dim); font-size: .85em; white-space: pre-wrap; max-height: 9em; overflow: hidden; }
+.badge { display: inline-block; padding: .15em .6em; border-radius: 99px; background: var(--accent); color: var(--accent-text); font-weight: 700; font-size: .9em; }
+
 /* ---------- game options ---------- */
 .overlay { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: rgba(0,0,0,.6);
   backdrop-filter: blur(10px); animation: fade .18s ease; }

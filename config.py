@@ -21,7 +21,8 @@ DEFAULTS = {
     "shelf_sort": "title",      # title | recent | played
     "card_size": 1.0,
     "controller_nav": True,
-    "setup_done": False,
+    "check_updates": True,      # look for a new Relic on GitHub when it starts
+    "seen_version": "",
 }
 EDITABLE = set(DEFAULTS)
 

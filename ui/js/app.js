@@ -16,6 +16,7 @@ async function loadState() {
   S.config = st.config; S.themes = st.themes; S.ra = st.retroarch; S.native = st.native; S.version = st.version;
   setPlaying(st.playing);
   applyTheme(S.config.theme);
+  if (st.update) setUpdate(st.update);
 }
 async function loadLibrary(refresh = false) {
   const r = refresh ? await R.api("/api/rescan", {}) : await R.api("/api/library");
@@ -67,7 +68,7 @@ function show(name) {
 function renderHome(focusKey) {
   const games = visibleGames();
   $("#sys-rail").innerHTML = S.systems.filter((s) => games.some((g) => g.system === s.id)).map(sysTile).join("")
-    + `<div class="sys sys-settings" data-nav data-do="settings" data-key="settings"><div class="sys-name">Settings</div><div class="sys-count">RetroArch, folders, look</div></div>`;
+    + `<div class="sys sys-settings" data-nav data-do="settings" data-key="settings"><div class="sys-name">Settings</div><div class="sys-count">${S.update && (S.update.available || S.update.ready) ? '<span class="badge">Update ready</span>' : "RetroArch, folders, look"}</div></div>`;
   const rows = [];
   const recent = games.filter((g) => g.last).sort((a, b) => b.last - a.last).slice(0, 14);
   if (recent.length) rows.push(["Continue playing", "recent", recent]);
@@ -296,6 +297,52 @@ async function cycleCore(g) {
   renderPopActions("core");
 }
 
+// ---------- updates ----------
+let updPoll = 0, updToasted = false;
+function setUpdate(u) {
+  const was = S.update;
+  S.update = u;
+  if (!u) return;
+  if (u.available && !updToasted && !u.busy) {
+    updToasted = true;
+    R.toast(`Relic ${u.latest} is out. Open Settings to update.`);
+  }
+  if (was && was.busy && !u.busy) {
+    if (u.ready) R.toast("Update downloaded. Restart Relic to finish.");
+    else if (u.error) R.toast(u.error, true);
+  }
+  clearTimeout(updPoll);
+  if (u.busy) updPoll = setTimeout(async () => { try { setUpdate(await R.api("/api/update")); } catch (e) {} }, 700);
+  if (screen === "settings") renderUpdate();
+}
+function renderUpdate() {
+  const u = S.update || {};
+  const box = $("#upd-status"), acts = $("#upd-actions");
+  if (!box) return;
+  const how = { dir: "installed", single: "single file", git: "from git", source: "from source" }[u.mode] || "";
+  let line, cls = "";
+  if (u.ready) { line = `Relic ${u.latest} is ready. Restart to finish.`; cls = "ok"; }
+  else if (u.busy) line = `${u.phase || "Working"}…${u.progress != null ? ` ${Math.round(u.progress * 100)}%` : ""}`;
+  else if (u.available && u.migrate) { line = "Install Relic so it starts faster and gets a Start menu shortcut."; cls = "ok"; }
+  else if (u.available) { line = `Relic ${u.latest} is available.`; cls = "ok"; }
+  else if (u.error) { line = u.error; cls = "bad"; }
+  else if (u.checked_at) line = `You're up to date${u.latest ? ` (${u.latest})` : ""}.`;
+  else line = "Not checked yet.";
+  box.innerHTML = `<div class="${cls}">${esc(line)}</div><div class="path">Version ${esc(u.current || S.version)}${how ? ` · ${how}` : ""}</div>`
+    + (u.busy && u.progress != null ? `<div class="bar"><i style="width:${Math.round(u.progress * 100)}%"></i></div>` : "")
+    + (u.available && u.notes ? `<div class="notes">${esc(u.notes.slice(0, 600))}</div>` : "");
+  // Keep focus on the update button as it changes (Check → Update → Restart).
+  const cur = R.nav.cur;
+  const focused = cur && (acts.contains(cur) || (!document.body.contains(cur) && /^upd-/.test(cur.dataset.do || "")));
+  let btn;
+  if (u.ready) btn = ["upd-restart", "Restart Relic now"];
+  else if (u.busy) btn = null;
+  else if (u.available) btn = ["upd-apply", u.migrate ? "Install Relic" : `Update to ${u.latest}`];
+  else btn = ["upd-check", "Check for updates"];
+  acts.innerHTML = btn ? `<button class="btn" data-nav data-do="${btn[0]}">${esc(btn[1])}</button>` : "";
+  if (focused && $("[data-do]", acts)) R.nav.focus($("[data-do]", acts), { scroll: false });
+}
+
 // ---------- settings ----------
 const TOGGLES = [
   ["start_fullscreen", "Open Relic full screen"],
@@ -305,6 +352,7 @@ const TOGGLES = [
   ["download_art", "Download box art"],
   ["sounds", "Menu sounds"],
   ["controller_nav", "Controller navigation"],
+  ["check_updates", "Check for updates when Relic starts"],
 ];
 function renderSettings(focusDo) {
   const ra = S.ra;
@@ -323,6 +371,7 @@ function renderSettings(focusDo) {
     `<button class="btn theme${t.id === S.config.theme ? " on" : ""}" data-nav data-do="theme" data-id="${t.id}">
       <span class="sw">${(t.swatch || []).map((c) => `<i style="background:${esc(c)}"></i>`).join("")}</span>${esc(t.name)}</button>`).join("");
   $("#ver").textContent = S.version;
+  renderUpdate();
   if (focusDo) {
     const el = typeof focusDo === "string" ? $(focusDo, $("#settings")) : null;
     R.nav.focus(el || $("#settings [data-nav]"), { scroll: false });
@@ -408,6 +457,20 @@ async function doAction(el) {
       await R.setConfig({ theme: el.dataset.id });
       applyTheme(el.dataset.id);
       return renderSettings(`[data-id="${el.dataset.id}"]`);
+    }
+    if (d === "upd-check") {
+      setUpdate({ ...(S.update || {}), busy: true, phase: "Checking", progress: null });
+      const r = await R.api("/api/update", { action: "check" });
+      setUpdate(r);
+      if (!r.available && !r.error) R.toast("Relic is up to date");
+      return;
+    }
+    if (d === "upd-apply") return setUpdate(await R.api("/api/update", { action: "apply" }));
+    if (d === "upd-restart") {
+      await R.api("/api/update", { action: "restart" });
+      $("#launching-text").textContent = "Restarting Relic…";
+      $("#launching").hidden = false;
+      return;
     }
     const g = popGame;
     if (d === "pop-play") { closePop(); return launch(g); }
@@ -530,6 +593,13 @@ async function start() {
     if (S.config.start_fullscreen) document.body.classList.add("fullscreen");
   }
   renderHome();
+  // Relic checks GitHub in the background as it starts; pick up the answer.
+  setTimeout(async () => {
+    try {
+      setUpdate(await R.api("/api/update"));
+      if (screen === "home" && S.update && S.update.available) renderHome(R.nav.cur && R.nav.cur.dataset.key);
+    } catch (e) {}
+  }, 5000);
 }
 window.addEventListener("pywebviewready", () => { S.native = true; $("#win-ctl").hidden = false; });
 start();

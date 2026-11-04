@@ -13,6 +13,7 @@ Relic reads what RetroArch already knows (its playlists, cores and thumbnails) a
 - **Library from**: every RetroArch playlist, plus any ROM folders you add. Name subfolders after the system (`SNES`, `Genesis`, `PS1`…) or keep one mixed folder (Relic sorts by file type). Multi-disc games with a `.m3u` show once.
 - **Cores**: Relic picks the best installed core per system (Snes9x, Genesis Plus GX, SwanStation, mGBA…). You can change it per game with **Y → Core**. If a core is missing, Relic tells you which one to download.
 - **While you play**: Relic minimizes, records the session, and comes back when RetroArch closes. Play time and last played show on each game.
+- **Updates built in**: Relic checks GitHub when it starts and shows **Update ready** on the Settings tile. In Settings → Updates, one button downloads, verifies and installs the new version, then restarts Relic. The single-file `Relic.exe` installs itself to `%LOCALAPPDATA%\Programs\Relic` (with Start menu and Desktop shortcuts) the first time you update. A copy run from source updates with `git pull`.
 - **Themes**: Relic, Arcade, Phosphor (with scanlines) and Console Gray. You can drop your own `.css` themes into `%APPDATA%\Relic\themes`.
 
 ## Run it
@@ -34,6 +35,7 @@ Options: `--windowed` starts in a window, and `--browser` runs it in your web br
 | `systems.py` | the consoles Relic knows, their file types, folder names and preferred cores |
 | `library.py` | builds the library from playlists and ROM folders |
 | `art.py` | box art, screenshots and title screens |
+| `updater.py`, `install.py` | checking GitHub releases, downloading and swapping in updates, shortcuts |
 | `gamedata.py` | favorites, per-game core, play sessions |
 | `server.py` | the local API the UI talks to (127.0.0.1 only) |
 | `ui/` | the couch UI: `core.js` helpers, `pad.js` controller and keyboard, `app.js` screens |

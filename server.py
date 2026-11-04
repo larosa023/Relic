@@ -29,11 +29,13 @@ def list_themes(dirs: list[Path]) -> list[dict]:
 
 class Context:
     def __init__(self, *, token, ra, library, art, config, meta, sessions, player,
-                 ui_dir, theme_dirs, data_dir, window_api=None):
+                 ui_dir, theme_dirs, data_dir, window_api=None, updater=None, restart=None):
         self.token, self.ra, self.library, self.art = token, ra, library, art
         self.config, self.meta, self.sessions, self.player = config, meta, sessions, player
         self.ui_dir, self.theme_dirs, self.data_dir = ui_dir, theme_dirs, data_dir
         self.window_api = window_api
+        self.updater = updater
+        self.restart = restart or (lambda: None)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -136,6 +138,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": False, "error": "forbidden"}, 403)
         if path == "/api/state":
             return self._json(self._state())
+        if path == "/api/update":
+            return self._json(c.updater.snapshot() if c.updater else {})
         if path == "/api/library":
             refresh = parse_qs(parts.query).get("refresh") == ["1"]
             return self._json(self._library(refresh))
@@ -150,6 +154,7 @@ class Handler(BaseHTTPRequestHandler):
             "themes": list_themes(c.theme_dirs),
             "native": bool(c.window_api),
             "playing": c.player.snapshot(),
+            "update": c.updater.snapshot() if c.updater else None,
             "retroarch": {
                 "found": ra.found,
                 "exe": str(ra.exe or ""),
@@ -208,6 +213,8 @@ class Handler(BaseHTTPRequestHandler):
                 c.ra.find(c.config["retroarch_path"] or None)
                 c.art.forget_misses()
                 return self._json({"ok": True} | self._library(refresh=True))
+            if path == "/api/update":
+                return self._update(body.get("action"))
             if path == "/api/customart":
                 return self._custom_art(body)
             if path == "/api/window":
@@ -236,6 +243,24 @@ class Handler(BaseHTTPRequestHandler):
         fs = bool(c.config["launch_fullscreen"])
         c.player.run(g, lambda: c.ra.launch(core, g["path"], fs))
         return self._json({"ok": True, "core": Path(core).name})
+
+    def _update(self, action):
+        u = self.ctx.updater
+        if not u:
+            raise RuntimeError("Updates aren't available in this copy")
+        if action == "check":
+            return self._json({"ok": True} | u.check())
+        if action == "apply":
+            if not u.apply_async():
+                s = u.snapshot()
+                raise RuntimeError(s.get("error") or ("Already updating" if s["busy"] else "No update to install"))
+            return self._json({"ok": True} | u.snapshot())
+        if action == "restart":
+            if self.ctx.player.current:
+                raise RuntimeError("Close your game first, then restart Relic")
+            self.ctx.restart()
+            return self._json({"ok": True})
+        return self._json({"ok": False, "error": "unknown"}, 404)
 
     def _custom_art(self, body):
         c = self.ctx
