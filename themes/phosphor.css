@@ -1,0 +1,12 @@
+/*
+  @name   Phosphor
+  @swatch #050a06 #0c1810 #49f28a
+*/
+:root {
+  --bg: #050a06; --surface: #0c1810; --surface-2: #12221a; --border: #1a3324;
+  --text: #dcffe7; --dim: #79a98b; --accent: #49f28a; --accent-text: #03140a; --glow: rgba(73,242,138,.4);
+  --font: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+}
+/* faint CRT scanlines */
+body::after { content: ""; position: fixed; inset: 0; z-index: 50; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px); }

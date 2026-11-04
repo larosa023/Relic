@@ -1,0 +1,102 @@
+name: Release
+
+# Publishes Relic.exe as a GitHub release, which Relic's built-in updater picks up.
+#
+# Runs automatically whenever version.py changes on main: if there's no release
+# for that version yet, it builds the exe and publishes release v<VERSION>.
+# Publishing a release by hand on GitHub (or pushing a v* tag) also works.
+on:
+  push:
+    branches: [main]
+    paths: [version.py]
+    tags: ["v*"]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Work out the version
+        id: ver
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          import json, os, subprocess, sys, urllib.request
+          sys.path.insert(0, ".")
+          from version import VERSION
+          tag = os.environ["RELEASE_TAG"] or (os.environ["REF_NAME"] if os.environ["REF_TYPE"] == "tag" else f"v{VERSION}")
+          if tag.lstrip("vV") != VERSION:
+              sys.exit(f"Tag {tag} does not match version.py ({VERSION}); bump version.py first")
+          # On a plain push to main, skip if this version was already released.
+          skip = "false"
+          if os.environ["EVENT"] in ("push", "workflow_dispatch") and os.environ["REF_TYPE"] == "branch":
+              req = urllib.request.Request(
+                  f"https://api.github.com/repos/${{ github.repository }}/releases/tags/{tag}",
+                  headers={"Authorization": f"Bearer {os.environ['GH_TOKEN']}", "Accept": "application/vnd.github+json"})
+              try:
+                  urllib.request.urlopen(req)
+                  skip = "true"
+                  print(f"{tag} is already released; nothing to do.")
+              except urllib.error.HTTPError as e:
+                  if e.code != 404:
+                      raise
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"tag={tag}\nskip={skip}\n")
+
+      - name: Install
+        if: steps.ver.outputs.skip != 'true'
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Build (installed folder version)
+        if: steps.ver.outputs.skip != 'true'
+        run: >
+          pyinstaller --noconfirm --clean --onedir --noconsole --optimize 1 --name Relic
+          --icon assets\relic.ico --add-data "ui;ui" --add-data "themes;themes" --add-data "assets;assets"
+          --exclude-module tkinter --exclude-module pydoc_data --exclude-module test --exclude-module lib2to3
+          --distpath dist-dir --workpath build-dir main.py
+
+      - name: Zip the folder version
+        if: steps.ver.outputs.skip != 'true'
+        shell: pwsh
+        run: Compress-Archive -Path dist-dir\Relic\* -DestinationPath Relic-win64.zip -CompressionLevel Optimal
+
+      - name: Build Relic.exe (single file, for first downloads and older copies)
+        if: steps.ver.outputs.skip != 'true'
+        run: >
+          pyinstaller --noconfirm --clean --onefile --noconsole --optimize 1 --name Relic
+          --icon assets\relic.ico --add-data "ui;ui" --add-data "themes;themes" --add-data "assets;assets"
+          --exclude-module tkinter --exclude-module pydoc_data --exclude-module test --exclude-module lib2to3
+          --distpath dist-one --workpath build-one main.py
+
+      - name: Publish release
+        if: steps.ver.outputs.skip != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: Relic ${{ steps.ver.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          files: |
+            dist-one/Relic.exe
+            Relic-win64.zip
+          generate_release_notes: true
+          make_latest: true

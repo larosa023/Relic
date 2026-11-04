@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relic</title>
+<link rel="stylesheet" href="/ui/app.css">
+<link rel="stylesheet" id="theme-css" href="/themes/relic.css">
+<script>window.RELIC_TOKEN = "{{TOKEN}}"; window.RELIC_VERSION = "{{VERSION}}";</script>
+</head>
+<body>
+<div id="backdrop"><div class="bd-img" id="bd-a"></div><div class="bd-img" id="bd-b"></div><div class="bd-shade"></div></div>
+
+<header id="top">
+  <div class="brand"><span class="glyph"></span><span class="word">RELIC</span></div>
+  <div id="crumb"></div>
+  <div class="spacer"></div>
+  <div id="now-playing" hidden></div>
+  <div id="clock"></div>
+  <div class="win" id="win-ctl" hidden>
+    <button data-win="min" title="Minimize">&#x2013;</button>
+    <button data-win="full" title="Full screen (F11)">&#x26F6;</button>
+    <button data-win="close" title="Close">&#x2715;</button>
+  </div>
+</header>
+
+<main id="screens">
+  <!-- Home: systems + rows -->
+  <section class="screen" id="home" hidden>
+    <div class="row-title">Systems</div>
+    <div class="rail" id="sys-rail"></div>
+    <div id="home-rows"></div>
+    <div id="empty" class="empty" hidden></div>
+  </section>
+
+  <!-- One system's shelf -->
+  <section class="screen" id="shelf" hidden>
+    <div class="shelf-head">
+      <div>
+        <div class="shelf-maker" id="shelf-maker"></div>
+        <h1 id="shelf-name"></h1>
+      </div>
+      <div class="spacer"></div>
+      <div class="pill" id="shelf-sort"></div>
+      <div class="pill" id="shelf-count"></div>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <!-- Settings -->
+  <section class="screen" id="settings" hidden>
+    <h1>Settings</h1>
+    <div class="set-cols">
+      <div class="set-group">
+        <h2>RetroArch</h2>
+        <div class="ra-status" id="ra-status"></div>
+        <button class="btn" data-nav data-do="pick-ra">Choose RetroArch folder…</button>
+        <button class="btn" data-nav data-do="auto-ra">Find it automatically</button>
+        <h2>ROM folders</h2>
+        <p class="hint">Relic always shows RetroArch's playlists. Add folders to pick up games RetroArch hasn't scanned. Name subfolders after the system (SNES, Genesis, PS1…) or keep one mixed folder.</p>
+        <div id="rom-folders"></div>
+        <button class="btn" data-nav data-do="add-folder">Add a folder…</button>
+        <button class="btn" data-nav data-do="rescan">Rescan everything</button>
+      </div>
+      <div class="set-group">
+        <h2>Couch</h2>
+        <div id="toggles"></div>
+        <h2>Theme</h2>
+        <div class="themes" id="themes"></div>
+        <h2>About</h2>
+        <p class="hint">Relic <span id="ver"></span> · Cinder's cousin for old consoles.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Game options (Y) -->
+<div class="overlay" id="game-pop" hidden>
+  <div class="pop">
+    <div class="pop-art" id="pop-art"></div>
+    <div class="pop-body">
+      <div class="pop-sys" id="pop-sys"></div>
+      <h2 id="pop-title"></h2>
+      <div class="pop-meta" id="pop-meta"></div>
+      <div class="pop-actions" id="pop-actions"></div>
+    </div>
+  </div>
+</div>
+
+<footer id="hints"></footer>
+<div id="toast" hidden></div>
+<div id="launching" hidden><div class="spin"></div><div id="launching-text"></div></div>
+
+<script src="/ui/js/core.js"></script>
+<script src="/ui/js/pad.js"></script>
+<script src="/ui/js/app.js"></script>
+</body>
+</html>

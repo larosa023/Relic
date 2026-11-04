@@ -1,0 +1,8 @@
+/*
+  @name   Console Gray
+  @swatch #1a1b20 #2a2c33 #a38bff
+*/
+:root {
+  --bg: #1a1b20; --surface: #2a2c33; --surface-2: #34363e; --border: #40434c;
+  --text: #eceef3; --dim: #a3a7b3; --accent: #a38bff; --accent-text: #160d33; --glow: rgba(163,139,255,.45);
+}

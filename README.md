@@ -1,0 +1,40 @@
+# Relic
+
+A sleek couch-mode launcher for your RetroArch games on Windows. Cinder's cousin for old consoles.
+
+Relic reads what RetroArch already knows (its playlists, cores and thumbnails) and launches games through your installed RetroArch. It never changes RetroArch's own files.
+
+## Features (0.1)
+
+- **Couch first**: opens full screen, driven by a controller. D-pad or stick moves (hold to scroll faster), **A** plays, **X** favorites, **Y** opens game options, **LB/RB** jump between systems, **Select** changes the sort, **Start** opens settings, **B** goes back. Mouse and keyboard work too.
+- **Your systems up front**: a row of system tiles (SNES, Genesis, PlayStation…) with game counts, then **Continue playing** and **Favorites**.
+- **Box art shelves**: each system gets a shelf of covers shaped like that system's boxes, with the focused game's screenshot blurred behind.
+- **Box art from**: your own picture, RetroArch's thumbnails folder, or the libretro thumbnails server. It matches loosely, so `Super Mario World.sfc` still finds `Super Mario World (USA)`. Art is cached in `%APPDATA%\Relic\art`.
+- **Library from**: every RetroArch playlist, plus any ROM folders you add. Name subfolders after the system (`SNES`, `Genesis`, `PS1`…) or keep one mixed folder (Relic sorts by file type). Multi-disc games with a `.m3u` show once.
+- **Cores**: Relic picks the best installed core per system (Snes9x, Genesis Plus GX, SwanStation, mGBA…). You can change it per game with **Y → Core**. If a core is missing, Relic tells you which one to download.
+- **While you play**: Relic minimizes, records the session, and comes back when RetroArch closes. Play time and last played show on each game.
+- **Themes**: Relic, Arcade, Phosphor (with scanlines) and Console Gray. You can drop your own `.css` themes into `%APPDATA%\Relic\themes`.
+
+## Run it
+
+Install [RetroArch](https://www.retroarch.com/) and some cores first. Then:
+
+- From source: double-click `run.bat` (it sets up Python packages the first time).
+- Build an exe: double-click `build.bat`, which makes `dist\Relic\` and `dist\Relic.exe`.
+- Releases: bump `VERSION` in `version.py` and push to `main`. GitHub builds `Relic.exe` and publishes the release.
+
+Options: `--windowed` starts in a window, and `--browser` runs it in your web browser.
+
+## Files
+
+| | |
+|---|---|
+| `main.py` | window, start-up, tucking away while you play |
+| `retroarch.py` | finding RetroArch, reading `retroarch.cfg`, cores, playlists, launching |
+| `systems.py` | the consoles Relic knows, their file types, folder names and preferred cores |
+| `library.py` | builds the library from playlists and ROM folders |
+| `art.py` | box art, screenshots and title screens |
+| `gamedata.py` | favorites, per-game core, play sessions |
+| `server.py` | the local API the UI talks to (127.0.0.1 only) |
+| `ui/` | the couch UI: `core.js` helpers, `pad.js` controller and keyboard, `app.js` screens |
+| `themes/` | built-in themes |

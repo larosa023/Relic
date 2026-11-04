@@ -1,0 +1,8 @@
+/*
+  @name   Relic
+  @swatch #0b0a09 #17140f #e0a84a
+*/
+:root {
+  --bg: #0b0a09; --surface: #17140f; --surface-2: #211c15; --border: #2e271d;
+  --text: #f3ece0; --dim: #9c9282; --accent: #e0a84a; --accent-text: #1b1408; --glow: rgba(224,168,74,.45);
+}

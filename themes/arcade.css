@@ -1,0 +1,8 @@
+/*
+  @name   Arcade
+  @swatch #08060f #151026 #ff3fa4
+*/
+:root {
+  --bg: #08060f; --surface: #151026; --surface-2: #1f1838; --border: #2c2350;
+  --text: #f4efff; --dim: #9a8fc0; --accent: #ff3fa4; --accent-text: #19041a; --glow: rgba(255,63,164,.5);
+}
