@@ -41,7 +41,8 @@ STANDALONE_RELEASES = {
 
 # BIOS files systems can't start without. Any one file from `files` is enough.
 BIOS = {
-    "ps2": {"dir": "pcsx2/bios", "files": None, "what": "a PS2 BIOS (any region), dumped from your PS2"},
+    "ps2": {"dir": "pcsx2/bios", "files": None, "size": (2 << 20, 8 << 20),
+            "what": "a PS2 BIOS (any region, about 4 MB), dumped from your PS2"},
     "segacd": {"dir": "", "files": ["bios_CD_U.bin", "bios_CD_E.bin", "bios_CD_J.bin"], "what": "a Sega CD BIOS (bios_CD_U.bin for US games)"},
     "saturn": {"dir": "", "files": ["sega_101.bin", "mpr-17933.bin", "saturn_bios.bin"], "what": "a Saturn BIOS (sega_101.bin or mpr-17933.bin)"},
     "pcecd": {"dir": "", "files": ["syscard3.pce"], "what": "the TurboGrafx-CD System Card 3 (syscard3.pce)"},
@@ -133,7 +134,12 @@ class Setup:
         folder = sysdir / req["dir"] if req["dir"] else sysdir
         try:
             if req["files"] is None:
-                present = folder.is_dir() and any(f.is_file() and f.suffix.lower() in (".bin", ".rom", ".nvm", "") for f in folder.iterdir())
+                # Any real BIOS dump: a .bin of the right size. (The emulator's own .nvm/.mec settings
+                # files, or a BIOS for another console, don't count.)
+                lo, hi = req.get("size", (1, 1 << 30))
+                present = folder.is_dir() and any(
+                    f.is_file() and f.suffix.lower() in (".bin", ".rom") and lo <= f.stat().st_size <= hi
+                    for f in folder.iterdir())
             else:
                 have = {f.name.lower() for f in folder.iterdir()} if folder.is_dir() else set()
                 present = any(n.lower() in have for n in req["files"])
