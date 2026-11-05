@@ -6,12 +6,13 @@ Relic reads what RetroArch already knows (its playlists, cores and thumbnails) a
 
 ## Features
 
-- **Couch first**: opens full screen, driven by a controller. D-pad or stick moves (hold to scroll faster), **A** plays, **X** favorites, **Y** opens game options, **LB/RB** jump between systems, **Select** changes the sort, **Start** opens settings, **B** goes back. Mouse and keyboard work too.
+- **Couch first**: opens full screen, driven by a controller. D-pad or stick moves (hold to scroll faster), **A** plays, **X** favorites, **Y** opens game options, **LB/RB** jump between systems, **Select** changes the sort, **Start** opens settings, **B** goes back. Mouse and keyboard work too: there's a **Back** button in the top bar, and the mouse's side back button goes back.
 - **Your systems up front**: a row of system tiles (SNES, Genesis, PlayStation…) with game counts, then **Continue playing** and **Favorites**.
 - **Fast with big libraries**: the library is kept on disk, so Relic opens instantly and rescans quietly in the background, updating the screen if something changed. Shelves with thousands of games open in a blink, and moving stays instant.
 - **Find games quickly**: **LT/RT** (Page Up/Down) jump a shelf by letter. **Select** at home is *Surprise me*, a random pick nudged toward games you haven't played much. A *Recently added* row shows new games.
 - **Box art shelves**: each system gets a shelf of covers shaped like that system's boxes, with the focused game's screenshot blurred behind.
 - **Box art from**: your own picture, RetroArch's thumbnails folder, or the libretro thumbnails server. It matches loosely, so `Super Mario World.sfc` still finds `Super Mario World (USA)`. Art is cached in `%APPDATA%\Relic\art`.
+- **61 systems**: every console, handheld and computer RetroArch runs well: Nintendo (NES and Famicom Disk System through Wii, 3DS, Game & Watch, Pokémon Mini), Sega (SG-1000 through Dreamcast and NAOMI), Sony (PS1, PS2, PSP), NEC, Atari (2600 to Jaguar and ST), SNK, 3DO, CD-i, ColecoVision, Intellivision, Vectrex and more, plus computers (C64, Amiga, MSX, ZX Spectrum, Amstrad, PC-98, X68000, DOS), ScummVM, PICO-8, TIC-80 and arcade. Folder names are matched loosely: `PS2 Games`, `Sony PlayStation 2 ISOs`, `Game Boy Advance (USA)` and `Nintendo/SNES` all work.
 - **Library from**: every RetroArch playlist, plus any ROM folders you add. Name subfolders after the system (`SNES`, `Genesis`, `PS1`…) or keep one mixed folder (Relic sorts by file type). Multi-disc games with a `.m3u` show once.
 - **Cores**: Relic picks the best installed core per system (Snes9x, Genesis Plus GX, SwanStation, mGBA…). You can change it per game with **Y → Core**, then make that the default for the whole system. If a core is missing, Relic tells you which one to download.
 - **While you play**: Relic minimizes, records the session, and comes back when RetroArch closes. Play time and last played show on each game.

@@ -176,7 +176,16 @@ function shelfStep(d) {
 }
 const visibleSystems = () => S.systems.filter((s) => visibleGames().some((g) => g.system === s.id)).map((s) => s.id);
 
+/** The Back button in the top bar: shown anywhere except the home screen. */
+function updateBack() {
+  $("#back-btn").hidden = screen === "home";
+}
+$("#back-btn").addEventListener("click", () => R.nav.press("b"));
+// Clicking outside the game options box closes it.
+$("#game-pop").addEventListener("mousedown", (e) => { if (e.target.id === "game-pop") { R.sound("back"); closePop(); } });
+
 function renderCrumb() {
+  updateBack();
   const c = $("#crumb");
   if (screen === "shelf" && S.sysById[shelfSys]) c.innerHTML = `<span>${esc(S.sysById[shelfSys].name)}</span>`;
   else if (screen === "settings") c.innerHTML = "<span>Settings</span>";
@@ -317,6 +326,7 @@ function openPop(g, surprised = false) {
   $("#pop-meta").innerHTML = meta.map(esc).join(" · ") + `<div class="pop-file">${esc(g.label)}</div>`;
   renderPopActions();
   $("#game-pop").hidden = false;
+  updateBack();
   R.sound("select");
   R.nav.focus($("#pop-actions [data-nav]"));
   hints();
@@ -344,6 +354,7 @@ function renderPopActions(focusDo) {
 }
 function closePop() {
   $("#game-pop").hidden = true;
+  updateBack();
   if (pendingRefresh) setTimeout(refreshView, 0);
   const back = popReturn && document.body.contains(popReturn) ? popReturn : null;
   popGame = null;

@@ -41,6 +41,10 @@ button { font: inherit; color: inherit; }
   background: conic-gradient(from 210deg, var(--accent), color-mix(in srgb, var(--accent) 40%, #fff), var(--accent));
   box-shadow: 0 0 calc(var(--u) * .8) var(--glow); transform: rotate(45deg) scale(.8); }
 .brand .word { font-weight: 800; letter-spacing: .32em; font-size: calc(var(--u) * 1.05); }
+#back-btn { display: flex; align-items: center; gap: .3em; padding: .35em .95em .35em .75em; border-radius: 99px; cursor: pointer;
+  border: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 85%, transparent); color: var(--text);
+  font-weight: 600; font-size: .9em; position: relative; z-index: 11; }
+#back-btn:hover { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 #crumb { color: var(--dim); font-weight: 600; letter-spacing: .04em; }
 #crumb span::before { content: "/"; margin-right: calc(var(--u) * .8); opacity: .4; }
 #clock { color: var(--dim); font-variant-numeric: tabular-nums; font-weight: 600; }

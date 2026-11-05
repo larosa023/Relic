@@ -297,8 +297,8 @@ class Library:
                 if ext == "bin" and s.exts:
                     continue  # loose disc tracks; the .cue is the game
                 sys_ = s
-            elif s.id in ("gb", "gbc") and ext in ("gb", "gbc"):
-                sys_ = systems.BY_EXT[ext]  # Game Boy folders often hold both
+            elif ext in systems.BY_EXT:
+                sys_ = systems.BY_EXT[ext]  # a file type that says its system (.gbc in a Game Boy folder)
             else:
                 continue
             if has_m3u and DISC.search(f) and not fl.endswith(".m3u"):

@@ -56,6 +56,7 @@ const DIRS = new Set(["up", "down", "left", "right"]);
 /** Handlers get (button) and return true if they used it. Newest first. */
 N.on = (fn) => { N.handlers.unshift(fn); return () => (N.handlers = N.handlers.filter((h) => h !== fn)); };
 
+N.press = (btn) => press(btn);
 function press(btn) {
   for (const h of N.handlers) if (h(btn)) return;
   if (DIRS.has(btn)) N.move(btn);
@@ -148,6 +149,12 @@ document.addEventListener("keydown", (e) => {
 });
 
 // ---------- mouse ----------
+// The mouse's side "back" button goes back, like B. (The forward button is ignored.)
+document.addEventListener("mousedown", (e) => { if (e.button === 3 || e.button === 4) e.preventDefault(); });
+document.addEventListener("mouseup", (e) => {
+  if (e.button === 3) { e.preventDefault(); N.usingPad = false; press("b"); }
+  else if (e.button === 4) e.preventDefault();
+});
 document.addEventListener("mousemove", (e) => {
   const el = e.target.closest && e.target.closest("[data-nav]");
   if (el && el !== N.cur && N.scope().contains(el)) N.focus(el, { scroll: false });

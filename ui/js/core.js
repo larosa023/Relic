@@ -64,11 +64,18 @@ R.sysColor = (id) => ({
   gamegear: "#2c2c34", saturn: "#5a6dbd", dreamcast: "#f06a1d", psx: "#9aa0ac", ps2: "#2b4fa3", psp: "#3b3f48", gamecube: "#6a4fd1", wii: "#b9c2cf",
   pce: "#ff8a00", atari2600: "#a0522d", atari7800: "#b5651d", lynx: "#d8b23a", ngp: "#00a3a3",
   wonderswan: "#5c8ad6", arcade: "#e6328c",
+  fds: "#c8a032", n64dd: "#2a7c3f", "3ds": "#d33a3a", gw: "#b8862e", pokemini: "#e8c83a", sg1000: "#7e1f2b",
+  naomi: "#3a6fb5", pcecd: "#ff9a2a", sgx: "#e07a00", pcfx: "#6b6f7e", pc98: "#3f6f8f", atari5200: "#8a5a2b",
+  atari800: "#7a4b2a", jaguar: "#c41e1e", atarist: "#5a7a9a", neocd: "#c79a2a", "3do": "#7a2f2f", cdi: "#3d5fb0",
+  coleco: "#2f4f7f", intv: "#a4782b", vectrex: "#4a4a52", odyssey2: "#2f5f9f", channelf: "#8f6b3a",
+  supervision: "#4d7f5f", msx: "#3f5fa0", c64: "#6b5fb5", amiga: "#d94f2b", zx: "#3a3a44", cpc: "#3a6f3a",
+  x68000: "#6f6f78", dos: "#3a6fb5", scummvm: "#4fae4f", pico8: "#ff004d", tic80: "#41a6f6",
 }[id] || "#6c7a96");
 
 // Box shapes: SNES and N64 boxes are wide (US), disc cases and handhelds squarer, the rest tall.
 R.boxRatio = (id) => ({ snes: 1.38, n64: 1.38, gb: 1, gbc: 1, gba: 1, vb: 1, nds: .9, psx: 1, dreamcast: 1,
-  psp: .58, gamegear: .76, lynx: .9, ngp: .9, wonderswan: .9 }[id] || .72);
+  psp: .58, gamegear: .76, lynx: .9, ngp: .9, wonderswan: .9, "3ds": .9, pokemini: .9, gw: 1, neocd: 1,
+  pcecd: 1, "3do": 1, cdi: 1, saturn: .62, segacd: .62, supervision: .9 }[id] || .72);
 
 // ---------- sounds (tiny synthesized blips, no files) ----------
 let ac = null;
