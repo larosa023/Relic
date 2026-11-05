@@ -35,12 +35,59 @@ def _candidates() -> list[Path]:
             if pf:
                 out += [Path(pf) / "Steam" / "steamapps" / "common" / "RetroArch", Path(pf) / "RetroArch"]
         out.append(Path.home() / "scoop" / "apps" / "retroarch" / "current")
+        out += _from_registry() + _steam_libraries()
     else:
         out += [Path.home() / ".config" / "retroarch", Path.home() / ".var/app/org.libretro.RetroArch/config/retroarch",
                 Path.home() / ".steam/steam/steamapps/common/RetroArch"]
     on_path = shutil.which("retroarch")
     if on_path:
         out.insert(0, Path(on_path).resolve().parent)
+    return out
+
+
+def _from_registry() -> list[Path]:
+    """Where the RetroArch installer says it put RetroArch (Apps & features)."""
+    out = []
+    try:
+        import winreg
+    except ImportError:
+        return out
+    key = r"Software\Microsoft\Windows\CurrentVersion\Uninstall"
+    for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+        for view in (0, winreg.KEY_WOW64_32KEY):
+            try:
+                root = winreg.OpenKey(hive, key, 0, winreg.KEY_READ | view)
+            except OSError:
+                continue
+            for i in range(winreg.QueryInfoKey(root)[0]):
+                try:
+                    sub = winreg.OpenKey(root, winreg.EnumKey(root, i))
+                    name = winreg.QueryValueEx(sub, "DisplayName")[0]
+                    if "retroarch" not in str(name).lower():
+                        continue
+                    for v in ("InstallLocation", "DisplayIcon", "UninstallString"):
+                        try:
+                            val = str(winreg.QueryValueEx(sub, v)[0]).strip('"').split('",')[0]
+                        except OSError:
+                            continue
+                        p = Path(val)
+                        out.append(p if p.suffix == "" else p.parent)
+                except OSError:
+                    continue
+    return out
+
+
+def _steam_libraries() -> list[Path]:
+    """RetroArch from Steam, in any of your Steam library folders (other drives too)."""
+    out = []
+    for pf in (os.environ.get("ProgramFiles(x86)"), os.environ.get("ProgramFiles")):
+        vdf = Path(pf or "") / "Steam" / "steamapps" / "libraryfolders.vdf"
+        try:
+            text = vdf.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for m in re.finditer(r'"path"\s+"([^"]+)"', text):
+            out.append(Path(m[1].replace("\\\\", "\\")) / "steamapps" / "common" / "RetroArch")
     return out
 
 

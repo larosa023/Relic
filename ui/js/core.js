@@ -61,7 +61,7 @@ R.ago = (t) => {
 R.sysColor = (id) => ({
   nes: "#c8283c", snes: "#7a5cff", n64: "#2ea84f", gb: "#8bac0f", gbc: "#9b3bd6", gba: "#4b3fbf",
   nds: "#9aa4b5", vb: "#d01010", sms: "#d23b2f", genesis: "#1f6fe0", segacd: "#2a8ac9", "32x": "#e0a21f",
-  gamegear: "#2c2c34", saturn: "#5a6dbd", dreamcast: "#f06a1d", psx: "#9aa0ac", psp: "#3b3f48",
+  gamegear: "#2c2c34", saturn: "#5a6dbd", dreamcast: "#f06a1d", psx: "#9aa0ac", ps2: "#2b4fa3", psp: "#3b3f48", gamecube: "#6a4fd1", wii: "#b9c2cf",
   pce: "#ff8a00", atari2600: "#a0522d", atari7800: "#b5651d", lynx: "#d8b23a", ngp: "#00a3a3",
   wonderswan: "#5c8ad6", arcade: "#e6328c",
 }[id] || "#6c7a96");

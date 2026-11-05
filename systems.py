@@ -44,8 +44,14 @@ SYSTEMS = [
      ["gdi", "cdi"], ["flycast"]),
     ("psx", "PlayStation", "Sony - PlayStation", "Sony", 1995,
      ["pbp"], ["swanstation", "pcsx_rearmed", "mednafen_psx_hw", "mednafen_psx"]),
+    ("ps2", "PlayStation 2", "Sony - PlayStation 2", "Sony", 2000,
+     [], ["pcsx2", "play"]),
     ("psp", "PSP", "Sony - PlayStation Portable", "Sony", 2005,
-     ["cso"], ["ppsspp"]),
+     [], ["ppsspp"]),
+    ("gamecube", "GameCube", "Nintendo - GameCube", "Nintendo", 2001,
+     ["gcm", "gcz"], ["dolphin"]),
+    ("wii", "Wii", "Nintendo - Wii", "Nintendo", 2006,
+     ["wbfs", "wad"], ["dolphin"]),
     ("pce", "TurboGrafx-16", "NEC - PC Engine - TurboGrafx 16", "NEC", 1989,
      ["pce"], ["mednafen_pce_fast", "mednafen_pce"]),
     ("atari2600", "Atari 2600", "Atari - 2600", "Atari", 1977,
@@ -63,7 +69,7 @@ SYSTEMS = [
 ]
 
 # Disc formats that several systems share: Relic decides by the folder name instead.
-SHARED_EXT = {"cue", "chd", "iso", "m3u", "zip", "7z", "bin", "img", "ccd", "mds"}
+SHARED_EXT = {"cue", "chd", "iso", "m3u", "zip", "7z", "bin", "img", "ccd", "mds", "cso", "rvz"}
 
 # Words people use for their ROM folders, mapped to a system id.
 FOLDER_ALIASES = {
@@ -84,6 +90,9 @@ FOLDER_ALIASES = {
     "dc": "dreamcast", "dreamcast": "dreamcast",
     "psx": "psx", "ps1": "psx", "playstation": "psx", "psone": "psx",
     "psp": "psp",
+    "ps2": "ps2", "playstation2": "ps2", "sonyplaystation2": "ps2",
+    "gc": "gamecube", "gcn": "gamecube", "gamecube": "gamecube", "ngc": "gamecube", "nintendogamecube": "gamecube",
+    "wii": "wii", "nintendowii": "wii",
     "pce": "pce", "pcengine": "pce", "tg16": "pce", "turbografx": "pce", "turbografx16": "pce",
     "atari2600": "atari2600", "2600": "atari2600",
     "atari7800": "atari7800", "7800": "atari7800",
