@@ -26,7 +26,7 @@ SYSTEMS = [
     ("n64dd", "64DD", "Nintendo - Nintendo 64DD", "Nintendo", 1999,
      ["ndd"], ["mupen64plus_next"]),
     ("gamecube", "GameCube", "Nintendo - GameCube", "Nintendo", 2001,
-     ["gcm", "gcz"], ["dolphin"]),
+     ["gcm", "gcz", "rvz"], ["dolphin"]),
     ("wii", "Wii", "Nintendo - Wii", "Nintendo", 2006,
      ["wbfs", "wad"], ["dolphin"]),
     ("wiiu", "Wii U", "Nintendo - Wii U", "Nintendo", 2012,

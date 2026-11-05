@@ -22,6 +22,42 @@ CACHE_FORMAT = 2
 SKIP_DIRS = {"bios", "system", "saves", "states", "screenshots", "thumbnails", "media", "images", "manuals"}
 
 
+NINTENDO_DISC_EXT = {"iso", "rvz", "gcz", "wia", "ciso", "gcm", "wbfs"}
+
+
+def _sniff_nintendo_disc(p: Path) -> str | None:
+    """"gamecube" or "wii" if this disc image is one (by its header), else None. Reads 128 bytes."""
+    try:
+        with open(p, "rb") as f:
+            h = f.read(0x60)
+    except OSError:
+        return None
+    if len(h) < 0x20:
+        return None
+    if h[:4] in (b"RVZ\x01", b"WIA\x01"):  # Dolphin's formats: disc type 1 = GameCube, 2 = Wii
+        t = int.from_bytes(h[0x48:0x4C], "big")
+        return {1: "gamecube", 2: "wii"}.get(t)
+    if h[:4] == b"\x01\xc0\x0b\xb1":  # GCZ: sub type 0 = GameCube, 1 = Wii
+        t = int.from_bytes(h[4:8], "little")
+        return {0: "gamecube", 1: "wii"}.get(t)
+    if h[:4] == b"WBFS":
+        return "wii"
+    if h[:4] == b"CISO":
+        try:
+            with open(p, "rb") as f:
+                f.seek(0x8000)
+                h = f.read(0x20)
+        except OSError:
+            return None
+    # A plain disc image: the magic words in the disc header.
+    if len(h) >= 0x20:
+        if h[0x18:0x1C] == b"\x5d\x1c\x9e\xa3":
+            return "wii"
+        if h[0x1C:0x20] == b"\xc2\x33\x9f\x3d":
+            return "gamecube"
+    return None
+
+
 def game_id(path: str) -> str:
     return hashlib.sha1(os.path.normcase(path).encode("utf-8", "surrogatepass")).hexdigest()[:12]
 
@@ -208,9 +244,13 @@ class Library:
         if s:
             for c in self.cores_for(s):
                 return cores[c["id"]]["path"]
+        if s and s.cores:
+            # A console Relic knows, with none of its cores installed: never borrow another console's
+            # (the PS2 core opens .iso files too). Setup offers the right one instead.
+            return ""
         ext = game["path"].rsplit(".", 1)[-1].lower()
         for c in cores.values():
-            if ext in c["exts"]:
+            if ext in c["exts"] and (not c["databases"] or (s and s.db in c["databases"])):
                 return c["path"]
         return ""
 
@@ -332,7 +372,10 @@ class Library:
             if fl in listed:
                 continue
             ext = fl.rsplit(".", 1)[-1] if "." in fl else ""
-            if s is None:
+            disc = _sniff_nintendo_disc(dirpath / f) if ext in NINTENDO_DISC_EXT else None
+            if disc:
+                sys_ = systems.BY_ID[disc]  # the disc says what it is, whatever folder it's in
+            elif s is None:
                 sys_ = systems.BY_EXT.get(ext)  # a mixed folder: only file types that say their system
                 if not sys_:
                     continue
