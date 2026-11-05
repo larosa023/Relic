@@ -17,7 +17,11 @@ R.api = async (path, body) => {
   }
   const r = await fetch(path, opts);
   const data = await r.json().catch(() => ({}));
-  if (!r.ok || data.ok === false) throw new Error(data.error || r.statusText);
+  if (!r.ok || data.ok === false) {
+    const err = new Error(data.error || r.statusText);
+    err.data = data;
+    throw err;
+  }
   return data;
 };
 

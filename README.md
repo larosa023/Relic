@@ -25,7 +25,9 @@ Relic reads what RetroArch already knows (its playlists, cores and thumbnails) a
 
 ## Run it
 
-Install [RetroArch](https://www.retroarch.com/) and some cores first. Then:
+You don't need to install anything else first. Press Play on a game and Relic downloads what it needs: RetroArch (into `%LOCALAPPDATA%\Relic\RetroArch`), the right core for that console, or the standalone emulator for newer consoles (shadPS4, RPCS3, Cemu, xemu, Xenia). BIOS files are the exception: they're copyrighted, so for systems that need one (PS2, Sega CD, Saturn, TurboGrafx-CD, 3DO, Neo Geo CD, PC-FX) Relic says which file to add and opens the folder it goes in.
+
+To run Relic:
 
 - From source: double-click `run.bat` (it sets up Python packages the first time).
 - Build an exe: double-click `build.bat`, which makes `dist\Relic\` and `dist\Relic.exe`.
@@ -43,6 +45,7 @@ Options: `--windowed` starts in a window, and `--browser` runs it in your web br
 | `library.py` | builds the library from playlists and ROM folders |
 | `art.py` | box art, screenshots and title screens |
 | `updater.py`, `install.py` | checking GitHub releases, downloading and swapping in updates, shortcuts |
+| `setup_wizard.py`, `standalone.py` | downloading RetroArch, cores and emulators; BIOS checks; launching standalone emulators |
 | `gamedata.py` | favorites, per-game core, play sessions |
 | `server.py` | the local API the UI talks to (127.0.0.1 only) |
 | `ui/` | the couch UI: `core.js` helpers, `pad.js` controller and keyboard, `app.js` screens |

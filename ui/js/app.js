@@ -242,7 +242,7 @@ function hints() {
   const cur = R.nav.cur;
   const onGame = cur && cur.dataset.game && !$("#game-pop:not([hidden])");
   let list = [];
-  if (!$("#game-pop").hidden) list = [["a", "Select"], ["b", "Close"]];
+  if (!$("#game-pop").hidden || setupOpen()) list = [["a", "Select"], ["b", "Close"]];
   else if (screen === "settings") list = [["a", "Select"], ["b", "Back"]];
   else {
     list.push(["a", onGame ? "Play" : "Open"]);
@@ -286,8 +286,86 @@ async function launch(g) {
     setTimeout(() => ($("#launching").hidden = true), 1800);
   } catch (e) {
     $("#launching").hidden = true;
+    if (e.data && e.data.code === "setup") return openSetup(g, e.data.need);
     R.toast(e.message, true);
   }
+}
+
+// ---------- built-in setup ----------
+let setupGame = null, setupReturn = null, setupPoll = 0, setupAuto = false;
+function setupOpen() { return !$("#setup-pop").hidden; }
+function showSetup(kicker, title, body, actions, focusDo) {
+  if (!setupOpen()) setupReturn = R.nav.cur;
+  $("#setup-kicker").textContent = kicker;
+  $("#setup-title").textContent = title;
+  $("#setup-body").innerHTML = body;
+  $("#setup-actions").innerHTML = actions.map(([d, t]) => `<button class="btn wide" data-nav data-do="${d}">${esc(t)}</button>`).join("");
+  $("#setup-pop").hidden = false;
+  updateBack(); hints();
+  const btn = (focusDo && $(`#setup-actions [data-do="${focusDo}"]`)) || $("#setup-actions [data-nav]");
+  if (btn) R.nav.focus(btn); else R.nav.cur && R.nav.cur.classList.remove("focus");
+}
+function closeSetup() {
+  $("#setup-pop").hidden = true;
+  setupAuto = false;
+  const back = setupReturn && document.body.contains(setupReturn) ? setupReturn : null;
+  if (back) R.nav.focus(back, { scroll: false });
+  updateBack(); hints();
+}
+function openSetup(g, need) {
+  setupGame = g;
+  const s = S.sysById[g.system] || {};
+  if (need.manual) return showSetup(s.name || "Setup", g.title, `<p class="setup-p">${esc(need.manual)}</p>`, [["setup-settings", "Open Settings"], ["setup-close", "OK"]]);
+  if (need.steps.length) {
+    const items = need.steps.map((st) => `<li>${esc(st.label)}${st.kind === "retroarch" ? " <span>runs the games</span>" : st.kind === "core" ? " <span>the emulator for this console</span>" : " <span>this console's emulator</span>"}</li>`).join("");
+    const after = need.bios ? `<p class="setup-p dim">After that you'll also need ${esc(need.bios.what)}. Relic can't download BIOS files, but it'll show you where it goes.</p>` : "";
+    return showSetup(s.name || "Setup", `Get ${g.title} running`,
+      `<p class="setup-p">Relic will download and set up:</p><ul class="setup-list">${items}</ul>${after}`,
+      [["setup-go", "Download and play"], ["setup-close", "Not now"]]);
+  }
+  if (need.bios) return showBios(g, need.bios);
+}
+function showBios(g, b) {
+  const s = S.sysById[g.system] || {};
+  showSetup(s.name || "BIOS", `${s.name || "This system"} needs a BIOS`,
+    `<p class="setup-p">To start ${esc(g.title)}, add ${esc(b.what)}.</p>
+     ${b.files && b.files.length ? `<p class="setup-p dim">Any one of: ${b.files.map(esc).join(", ")}</p>` : ""}
+     <p class="setup-p dim">BIOS files are copyrighted, so they have to come from your own console. Put the file in:</p>
+     <div class="setup-path">${esc(b.folder || "RetroArch's system folder")}</div>`,
+    [...(S.native ? [["setup-bios", "Open the BIOS folder"]] : []), ["setup-retry", "I've added it, play"], ["setup-close", "Not now"]]);
+}
+function renderProgress(st) {
+  const n = (st.steps || []).length;
+  const pct = st.progress != null ? Math.round(st.progress * 100) : null;
+  $("#setup-body").innerHTML = `<p class="setup-p">${esc(st.phase || "Working")}…${pct != null ? ` ${pct}%` : ""}</p>
+    ${n > 1 ? `<p class="setup-p dim">Step ${Math.min(st.step + 1, n)} of ${n}</p>` : ""}
+    <div class="bar${pct == null ? " busy" : ""}"><i style="width:${pct == null ? 35 : pct}%"></i></div>
+    <p class="setup-p dim">You can close this; it keeps going.</p>`;
+}
+async function runSetup(body, title, then) {
+  setupAuto = true;
+  try {
+    const st = await R.api("/api/setup", body);
+    showSetup("Setup", title, "", [["setup-close", "Hide"]]);
+    renderProgress(st);
+  } catch (e) { return R.toast(e.message, true); }
+  clearInterval(setupPoll);
+  setupPoll = setInterval(async () => {
+    let st;
+    try { st = await R.api("/api/setup"); } catch (e) { return; }
+    if (st.busy) { if (setupOpen()) renderProgress(st); return; }
+    clearInterval(setupPoll);
+    await loadState(); await loadLibrary();
+    if (st.error) {
+      if (setupOpen()) showSetup("Setup", "That didn't work", `<p class="setup-p">${esc(st.error)}</p>`, [["setup-retry", "Try again"], ["setup-close", "Close"]]);
+      else R.toast(st.error, true);
+      return;
+    }
+    R.sound("fav");
+    if (screen === "settings") renderSettings();
+    if (then && setupOpen() && setupAuto) then();
+    else R.toast("All set");
+  }, 400);
 }
 
 async function setMeta(g, changes) {
@@ -486,12 +564,14 @@ function renderSettings(focusDo) {
   const ra = S.ra;
   $("#ra-status").innerHTML = ra.found
     ? `<div class="ok">● Found RetroArch</div><div class="path">${esc(ra.exe)}</div><div class="path">${ra.cores} core${ra.cores === 1 ? "" : "s"} installed${ra.playlists ? ` · playlists in ${esc(ra.playlists)}` : ""}</div>`
-    : `<div class="bad">● RetroArch not found</div><div class="path">Install it from retroarch.com, or choose its folder below.</div>`;
+    : `<div class="bad">● RetroArch not found</div><div class="path">Relic can download and set it up for you, or choose a copy you already have.</div>`;
+  $("#ra-install").innerHTML = ra.found ? "" : `<button class="btn primary" data-nav data-do="install-ra">Download and set up RetroArch</button>`;
   const emus = [...(S.emulators || [])].sort((a, b) => (b.has_games - a.has_games));
   $("#emulators").innerHTML = emus.map((e) => `<button class="btn folder emu" data-nav data-do="pick-emu" data-sid="${e.id}">
       <span class="emu-name">${esc(e.system)} · ${esc(e.name)}</span>
       <em class="${e.exe ? "ok" : ""}">${e.exe ? "Found" : e.has_games ? "Not found · choose…" : "Choose…"}</em>
-    </button>${e.exe ? `<div class="emu-path">${esc(e.exe)}</div>` : ""}`).join("");
+    </button>${e.exe ? `<div class="emu-path">${esc(e.exe)}</div>`
+      : e.downloadable ? `<button class="btn small" data-nav data-do="install-emu" data-sid="${e.id}">Download ${esc(e.name)}</button>` : ""}`).join("");
   const folders = S.config.rom_folders || [];
   $("#rom-folders").innerHTML = folders.length
     ? folders.map((f, i) => `<button class="btn folder" data-nav data-do="rm-folder" data-i="${i}"><span>${esc(f)}</span><em>Remove</em></button>`).join("")
@@ -595,6 +675,16 @@ async function doAction(el) {
       applyTheme(el.dataset.id);
       return renderSettings(`[data-id="${el.dataset.id}"]`);
     }
+    if (d === "setup-close") { R.sound("back"); return closeSetup(); }
+    if (d === "setup-settings") { closeSetup(); return openSettings(); }
+    if (d === "setup-go") {
+      const g = setupGame;
+      return runSetup({ action: "install", id: g.id }, `Setting up ${g.title}`, () => { closeSetup(); launch(g); });
+    }
+    if (d === "setup-retry") { const g = setupGame; closeSetup(); return g ? launch(g) : null; }
+    if (d === "setup-bios") { await R.api("/api/setup", { action: "open_bios", id: setupGame.id }); return R.toast("Opened the BIOS folder"); }
+    if (d === "install-ra") { setupGame = null; return runSetup({ action: "retroarch" }, "Setting up RetroArch", () => { closeSetup(); R.toast("RetroArch is ready"); renderSettings('[data-do="pick-ra"]'); }); }
+    if (d === "install-emu") { setupGame = null; const sid = el.dataset.sid; return runSetup({ action: "standalone", sid }, "Downloading the emulator", () => { closeSetup(); R.toast("Emulator ready"); renderSettings(`[data-sid="${sid}"]`); }); }
     if (d === "remap") return remap(el.dataset.act);
     if (d === "pick-emu") {
       const api = R.native();
@@ -665,6 +755,10 @@ R.nav.on((btn) => {
   const cur = R.nav.cur;
   const g = cur && cur.dataset.game && S.byId[cur.dataset.game];
   if (!$("#launching").hidden || R.nav.capturing) return true;
+  if (setupOpen()) {
+    if (btn === "b") { R.sound("back"); closeSetup(); return true; }
+    return !(btn === "a" || btn === "up" || btn === "down" || btn === "left" || btn === "right");
+  }
   if (!$("#game-pop").hidden) {
     if (btn === "b" || btn === "y") { R.sound("back"); closePop(); return true; }
     return false;  // directions and A work inside the popup

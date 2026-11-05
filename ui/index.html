@@ -56,6 +56,7 @@
       <div class="set-group">
         <h2>RetroArch</h2>
         <div class="ra-status" id="ra-status"></div>
+        <div id="ra-install"></div>
         <button class="btn" data-nav data-do="pick-ra">Choose RetroArch folder…</button>
         <button class="btn" data-nav data-do="auto-ra">Find it automatically</button>
         <h2>Other emulators</h2>
@@ -96,6 +97,18 @@
       <h2 id="pop-title"></h2>
       <div class="pop-meta" id="pop-meta"></div>
       <div class="pop-actions" id="pop-actions"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Built-in setup: download what a game needs, or say which BIOS to add -->
+<div class="overlay" id="setup-pop" hidden>
+  <div class="pop setup">
+    <div class="pop-body">
+      <div class="pop-sys" id="setup-kicker">Setup</div>
+      <h2 id="setup-title"></h2>
+      <div id="setup-body"></div>
+      <div class="pop-actions" id="setup-actions"></div>
     </div>
   </div>
 </div>

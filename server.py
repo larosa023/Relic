@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import os
+import sys
 import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -30,7 +32,7 @@ def list_themes(dirs: list[Path]) -> list[dict]:
 
 class Context:
     def __init__(self, *, token, ra, library, art, config, meta, sessions, player,
-                 ui_dir, theme_dirs, data_dir, window_api=None, updater=None, restart=None, activate=None):
+                 ui_dir, theme_dirs, data_dir, window_api=None, updater=None, restart=None, activate=None, setup=None):
         self.token, self.ra, self.library, self.art = token, ra, library, art
         self.config, self.meta, self.sessions, self.player = config, meta, sessions, player
         self.ui_dir, self.theme_dirs, self.data_dir = ui_dir, theme_dirs, data_dir
@@ -38,6 +40,7 @@ class Context:
         self.updater = updater
         self.restart = restart or (lambda: None)
         self.activate = activate or (lambda: None)
+        self.setup = setup
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -142,6 +145,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(self._state())
         if path == "/api/update":
             return self._json(c.updater.snapshot() if c.updater else {})
+        if path == "/api/setup":
+            return self._json(c.setup.snapshot() if c.setup else {})
         if path == "/api/library":
             q = parse_qs(parts.query)
             if "rev" in q:  # wait for the background rescan to change something
@@ -162,6 +167,7 @@ class Handler(BaseHTTPRequestHandler):
             "playing": c.player.snapshot(),
             "update": c.updater.snapshot() if c.updater else None,
             "emulators": self._emulators(),
+            "setup": c.setup.snapshot() if c.setup else None,
             "retroarch": {
                 "found": ra.found,
                 "exe": str(ra.exe or ""),
@@ -224,6 +230,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True} | self._library(refresh=True))
             if path == "/api/update":
                 return self._update(body.get("action"))
+            if path == "/api/setup":
+                return self._setup(body)
             if path == "/api/customart":
                 return self._custom_art(body)
             if path == "/api/activate":  # a second copy of Relic was opened: show this one
@@ -244,6 +252,11 @@ class Handler(BaseHTTPRequestHandler):
         g = c.library.get(gid)
         if not g:
             return self._json({"ok": False, "error": "No such game"}, 404)
+        need = c.setup.needs(g, c.meta.get(gid)) if c.setup else None
+        if need and (need["steps"] or need["bios"] or need["manual"]):
+            # Something's missing: the page offers to get it (or says which BIOS to add).
+            return self._json({"ok": False, "code": "setup", "title": g["title"], "need": need,
+                               "error": need["manual"] or "Setup needed"}, 409)
         if g["system"] in standalone.EMULATORS:
             return self._launch_standalone(g)
         core = c.library.core_path(g, c.meta.get(gid))
@@ -255,6 +268,43 @@ class Handler(BaseHTTPRequestHandler):
         fs = bool(c.config["launch_fullscreen"])
         c.player.run(g, lambda: c.ra.launch(core, g["path"], fs))
         return self._json({"ok": True, "core": Path(core).name})
+
+    def _setup(self, body):
+        c = self.ctx
+        act = body.get("action")
+        if act == "install":
+            g = c.library.get(str(body.get("id", "")))
+            if not g:
+                return self._json({"ok": False, "error": "No such game"}, 404)
+            steps = c.setup.needs(g, c.meta.get(g["id"]))["steps"]
+            if steps and not c.setup.start(steps):
+                raise RuntimeError("Already setting something up")
+            return self._json({"ok": True} | c.setup.snapshot())
+        if act == "retroarch":
+            if c.ra.found:
+                return self._json({"ok": True} | c.setup.snapshot())
+            if not c.setup.start([{"kind": "retroarch", "label": "RetroArch"}]):
+                raise RuntimeError("Already setting something up")
+            return self._json({"ok": True} | c.setup.snapshot())
+        if act == "standalone":
+            sid = str(body.get("sid", ""))
+            import setup_wizard
+            if sid not in setup_wizard.STANDALONE_RELEASES:
+                raise RuntimeError("Relic can't download that one; choose it instead")
+            if not c.setup.start([{"kind": "standalone", "id": sid, "label": standalone.EMULATORS[sid]["name"]}]):
+                raise RuntimeError("Already setting something up")
+            return self._json({"ok": True} | c.setup.snapshot())
+        if act == "open_bios":
+            g = c.library.get(str(body.get("id", "")))
+            b = c.setup.missing_bios(g["system"]) if g else None
+            folder = Path(b["folder"]) if b and b["folder"] else c.setup.system_dir()
+            if not folder:
+                raise RuntimeError("Set up RetroArch first")
+            folder.mkdir(parents=True, exist_ok=True)
+            if sys.platform == "win32":
+                os.startfile(str(folder))  # noqa: S606 - opens Explorer on RetroArch's own BIOS folder
+            return self._json({"ok": True, "folder": str(folder)})
+        return self._json({"ok": False, "error": "unknown"}, 404)
 
     def _launch_standalone(self, g):
         c = self.ctx
@@ -278,8 +328,10 @@ class Handler(BaseHTTPRequestHandler):
         for sid, emu in standalone.EMULATORS.items():
             s = c.library.system(sid)
             exe = standalone.find(sid, chosen.get(sid, ""))
+            import setup_wizard
             out.append({"id": sid, "system": s.name if s else sid, "name": emu["name"], "site": emu["site"],
-                        "exe": str(exe or ""), "has_games": sid in have})
+                        "exe": str(exe or ""), "has_games": sid in have,
+                        "downloadable": sid in setup_wizard.STANDALONE_RELEASES})
         return out
 
     def _update(self, action):

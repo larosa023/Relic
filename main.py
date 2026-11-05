@@ -18,6 +18,7 @@ from library import Library
 from reliclog import log, setup as setup_log
 from retroarch import RetroArch
 from server import Context, make_server
+from setup_wizard import Setup
 from updater import Updater
 from version import VERSION
 from winsnap import IS_WIN, WinSnap
@@ -225,7 +226,8 @@ def main() -> None:
     ctx = Context(token=secrets.token_urlsafe(24), ra=ra, library=library, art=Art(ddir, ra, cfg),
                   config=cfg, meta=meta, sessions=sessions, player=player,
                   ui_dir=res / "ui", theme_dirs=[res / "themes", ddir / "themes"], data_dir=ddir,
-                  window_api=window_api, updater=updater, restart=restart, activate=lambda: show_window())
+                  window_api=window_api, updater=updater, restart=restart, activate=lambda: show_window(),
+                  setup=Setup(ra, cfg, library))
     srv = make_server(ctx, args.port)
     url = f"http://127.0.0.1:{srv.server_address[1]}/"
 
