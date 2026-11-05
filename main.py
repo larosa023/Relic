@@ -19,6 +19,8 @@ from reliclog import log, setup as setup_log
 from retroarch import RetroArch
 from server import Context, make_server
 from setup_wizard import Setup
+from extras import States
+from metadata import Metadata
 from updater import Updater
 from version import VERSION
 from winsnap import IS_WIN, WinSnap
@@ -223,11 +225,20 @@ def main() -> None:
         threading.Thread(target=go, daemon=True).start()
 
     player = Player(sessions, on_start=on_start, on_stop=on_stop)
+    # Game details: fetched for the systems you have, after each scan, in the background.
+    details = Metadata(ddir, ra, on_change=library.bump)
+
+    def fetch_details():
+        if cfg["game_details"]:
+            dbs = sorted({library.system(g["system"]).db for g in library.games() if library.system(g["system"])})
+            details.fetch_async(dbs, allow_download=True)
+    library.after_scan.append(fetch_details)
+    threading.Thread(target=lambda: (library.games(), fetch_details()), daemon=True).start()
     ctx = Context(token=secrets.token_urlsafe(24), ra=ra, library=library, art=Art(ddir, ra, cfg),
                   config=cfg, meta=meta, sessions=sessions, player=player,
                   ui_dir=res / "ui", theme_dirs=[res / "themes", ddir / "themes"], data_dir=ddir,
                   window_api=window_api, updater=updater, restart=restart, activate=lambda: show_window(),
-                  setup=Setup(ra, cfg, library))
+                  setup=Setup(ra, cfg, library), details=details, states=States(ra))
     srv = make_server(ctx, args.port)
     url = f"http://127.0.0.1:{srv.server_address[1]}/"
 

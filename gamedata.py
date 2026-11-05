@@ -91,13 +91,16 @@ class Player:
             return None
         return {"id": self.current["id"], "title": self.current["title"], "since": self.current["since"]}
 
-    def run(self, game: dict, start) -> None:
+    def run(self, game: dict, start, watch_combo: bool = False) -> None:
         if self._proc and self._proc.poll() is None:
             raise RuntimeError(f"{self.current['title']} is still running. Close it first.")
         proc = start()
         self._proc = proc
         self.current = {"id": game["id"], "title": game["title"], "since": time.time()}
         self.on_start(game)
+        if watch_combo:  # standalone emulators: Back + Start closes them too
+            import extras
+            threading.Thread(target=extras.watch_quit_combo, args=(proc, threading.Event()), daemon=True).start()
 
         def wait():
             proc.wait()

@@ -201,7 +201,19 @@ class RetroArch:
         return out
 
     # ------------------------------------------------------------- launching
-    def launch(self, core_path: str, game_path: str, fullscreen: bool = True) -> subprocess.Popen:
+    @property
+    def states_dir(self): return self._dir("savestate_directory", "states")
+    @property
+    def system_dir(self): return self._dir("system_directory", "system")
+    @property
+    def autoconfig_dir(self): return self._dir("joypad_autoconfig_dir", "autoconfig")
+    @property
+    def shaders_dir(self): return self._dir("video_shader_dir", "shaders")
+    @property
+    def database_dir(self): return self._dir("content_database_path", "database/rdb")
+
+    def launch(self, core_path: str, game_path: str, fullscreen: bool = True,
+               append_cfg: Path | None = None, shader: str = "") -> subprocess.Popen:
         if not self.exe:
             raise RuntimeError("RetroArch wasn't found. Set its folder in Settings.")
         if not Path(core_path).is_file():
@@ -212,6 +224,10 @@ class RetroArch:
         args = [str(self.exe), "-L", core_path, game_path]
         if fullscreen:
             args.insert(1, "-f")
+        if append_cfg:  # Relic's settings for this launch, on top of yours (your retroarch.cfg isn't changed)
+            args[1:1] = ["--appendconfig", str(append_cfg)]
+        if shader:
+            args[1:1] = ["--set-shader", shader]
         if self.cfg_path and self.cfg_path.parent != self.exe.parent:
             args[1:1] = ["--config", str(self.cfg_path)]
         log.info("launching %s", args)

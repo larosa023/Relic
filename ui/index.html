@@ -43,6 +43,7 @@
         <h1 id="shelf-name"></h1>
       </div>
       <div class="spacer"></div>
+      <div id="shelf-filters"></div>
       <div class="pill" id="shelf-sort"></div>
       <div class="pill" id="shelf-count"></div>
     </div>
@@ -67,6 +68,14 @@
         <div id="rom-folders"></div>
         <button class="btn" data-nav data-do="add-folder">Add a folder…</button>
         <button class="btn" data-nav data-do="rescan">Rescan everything</button>
+        <h2>BIOS files</h2>
+        <p class="hint">Some consoles need a BIOS from your own console. Point Relic at the folder you keep them in: it recognises each one and puts it where its emulator looks, now and after every new install.</p>
+        <div id="bios-status"></div>
+        <button class="btn" data-nav data-do="bios-import">Import BIOS files…</button>
+        <h2>RetroAchievements</h2>
+        <div id="ra-box"></div>
+        <h2>Collections</h2>
+        <div id="cols-box"></div>
         <h2>Controller</h2>
         <p class="hint">Choose an action, then press the controller button or key you want for it. The D-pad, stick and arrow keys always move.</p>
         <div class="themes" id="control-presets"></div>
@@ -75,6 +84,9 @@
       <div class="set-group">
         <h2>Couch</h2>
         <div id="toggles"></div>
+        <h2>CRT look</h2>
+        <p class="hint">Scanlines and a soft glow like an old TV, from RetroArch's shaders.</p>
+        <div class="themes" id="crt-opts"></div>
         <h2>Theme</h2>
         <div class="themes" id="themes"></div>
         <h2>Updates</h2>
@@ -109,6 +121,18 @@
       <h2 id="setup-title"></h2>
       <div id="setup-body"></div>
       <div class="pop-actions" id="setup-actions"></div>
+    </div>
+  </div>
+</div>
+
+<!-- On-screen keyboard: search, collection names, sign-in -->
+<div class="overlay" id="kb-pop" hidden>
+  <div class="pop kb">
+    <div class="pop-body">
+      <div class="pop-sys" id="kb-kicker"></div>
+      <input id="kb-input" autocomplete="off" spellcheck="false">
+      <div class="kb-keys" id="kb-keys"></div>
+      <div class="kb-results" id="kb-results"></div>
     </div>
   </div>
 </div>

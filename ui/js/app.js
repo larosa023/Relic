@@ -69,7 +69,8 @@ function show(name) {
 
 function renderHome(focusKey) {
   const games = visibleGames();
-  $("#sys-rail").innerHTML = S.systems.filter((s) => games.some((g) => g.system === s.id)).map(sysTile).join("")
+  $("#sys-rail").innerHTML = `<div class="sys sys-search" data-nav data-do="search" data-key="search"><div class="sys-name">Search</div><div class="sys-count">Every game you have</div></div>`
+    + S.systems.filter((s) => games.some((g) => g.system === s.id)).map(sysTile).join("")
     + `<div class="sys sys-settings" data-nav data-do="settings" data-key="settings"><div class="sys-name">Settings</div><div class="sys-count">${S.update && (S.update.available || S.update.ready) ? '<span class="badge">Update ready</span>' : "RetroArch, folders, look"}</div></div>`;
   const rows = [];
   const recent = games.filter((g) => g.last).sort((a, b) => b.last - a.last).slice(0, 14);
@@ -79,6 +80,10 @@ function renderHome(focusKey) {
   if (newest.length > 6 && newest[0].added - newest[Math.min(13, newest.length - 1)].added > 3600) rows.push(["Recently added", "new", newest.slice(0, 14)]);
   const favs = games.filter((g) => g.favorite).sort((a, b) => a.sort.localeCompare(b.sort));
   if (favs.length) rows.push(["Favorites", "fav", favs]);
+  for (const col of S.config.collections || []) {
+    const list = col.games.map((id) => S.byId[id]).filter((g) => g && !g.hidden);
+    if (list.length) rows.push([col.name, `col-${col.id}`, list]);
+  }
   if (!recent.length && games.length) {
     // Something to start with: a handful from across your systems.
     const picks = [...games].sort(() => Math.random() - 0.5).slice(0, 14);
@@ -98,6 +103,38 @@ function renderHome(focusKey) {
   R.nav.focus(el);
 }
 
+// ---------- shelf filters (from game details) ----------
+let shelfFilter = { players: 0, genre: "" }, shelfFilterSys = null;
+const genreOf = (g) => String(g.genre || "").split(/[\/,;]/)[0].trim();
+function passesFilter(g) {
+  if (shelfFilter.players && !((g.players || 1) >= shelfFilter.players)) return false;
+  if (shelfFilter.genre && genreOf(g) !== shelfFilter.genre) return false;
+  return true;
+}
+function renderFilters(all) {
+  const box = $("#shelf-filters");
+  const hasInfo = all.some((g) => g.genre || g.players);
+  if (!hasInfo) { box.innerHTML = ""; return; }
+  const p = shelfFilter.players;
+  box.innerHTML = `<button class="pill btn-pill${p ? " on" : ""}" data-nav data-do="filter-players">${p ? `${p}+ players` : "Any players"}</button>
+    <button class="pill btn-pill${shelfFilter.genre ? " on" : ""}" data-nav data-do="filter-genre">${esc(shelfFilter.genre || "Any genre")}</button>`;
+}
+function cycleFilter(kind) {
+  const all = visibleGames().filter((g) => g.system === shelfSys);
+  if (kind === "players") {
+    const opts = [0, 2, 3, 4].filter((n) => !n || all.some((g) => (g.players || 1) >= n));
+    shelfFilter.players = opts[(opts.indexOf(shelfFilter.players) + 1) % opts.length];
+  } else {
+    const counts = {};
+    for (const g of all) { const x = genreOf(g); if (x) counts[x] = (counts[x] || 0) + 1; }
+    const opts = ["", ...Object.keys(counts).sort((a, b) => counts[b] - counts[a] || a.localeCompare(b))];
+    shelfFilter.genre = opts[(opts.indexOf(shelfFilter.genre) + 1) % opts.length];
+  }
+  R.sound("move");
+  openShelf(shelfSys, null);
+  R.nav.focus($(`[data-do="filter-${kind}"]`), { scroll: false });
+}
+
 function sortGames(list) {
   const mode = S.config.shelf_sort || "title";
   const by = {
@@ -113,7 +150,10 @@ function openShelf(sid, focusId, keepScroll = false) {
   if (!s) return renderHome();
   const scroll = keepScroll && shelfSys === sid ? $("#shelf").scrollTop : 0;
   shelfSys = sid;
-  const games = sortGames(visibleGames().filter((g) => g.system === sid));
+  const all = visibleGames().filter((g) => g.system === sid);
+  if (shelfFilterSys !== sid) { shelfFilter = { players: 0, genre: "" }; shelfFilterSys = sid; }
+  const games = sortGames(all.filter(passesFilter));
+  renderFilters(all);
   $("#shelf-maker").textContent = `${s.maker}${s.year ? ` · ${s.year}` : ""}`;
   $("#shelf-name").textContent = s.name;
   $("#shelf-count").textContent = `${games.length} game${games.length === 1 ? "" : "s"}`;
@@ -228,7 +268,8 @@ function showInfo(el) {
   let bar = $("#shelf-info");
   if (!bar) { bar = document.createElement("div"); bar.id = "shelf-info"; $("#shelf").appendChild(bar); }
   if (!g) { bar.innerHTML = ""; return; }
-  const bits = [g.region, R.playtime(g.played), g.last ? `last played ${R.ago(g.last)}` : ""].filter(Boolean);
+  const bits = [g.year, genreOf(g), g.players > 1 ? `${g.players} players` : "", g.region, R.playtime(g.played),
+    g.last ? `last played ${R.ago(g.last)}` : "", g.resumable ? "▶ resume where you left off" : ""].filter(Boolean);
   bar.innerHTML = `<div class="si-title">${g.favorite ? '<span class="si-star">★</span> ' : ""}${esc(g.title)}</div><div class="si-meta">${bits.map(esc).join(" · ")}</div>`;
 }
 
@@ -242,7 +283,8 @@ function hints() {
   const cur = R.nav.cur;
   const onGame = cur && cur.dataset.game && !$("#game-pop:not([hidden])");
   let list = [];
-  if (!$("#game-pop").hidden || setupOpen()) list = [["a", "Select"], ["b", "Close"]];
+  if (kbOpen()) list = [["a", "Type"], ["x", "Delete"], ["y", "Space"], ["start", "Done"], ["b", "Close"]];
+  else if (!$("#game-pop").hidden || setupOpen()) list = [["a", "Select"], ["b", "Close"]];
   else if (screen === "settings") list = [["a", "Select"], ["b", "Back"]];
   else {
     list.push(["a", onGame ? "Play" : "Open"]);
@@ -274,14 +316,14 @@ async function afterPlay(gid) {
   else if (screen === "home") renderHome(`recent:${gid}`);
 }
 
-async function launch(g) {
+async function launch(g, fresh = false) {
   if (!g) return;
   if (S.playing) return R.toast(`${S.playing.title} is still running`, true);
   R.sound("select");
   $("#launching-text").textContent = `Starting ${g.title}…`;
   $("#launching").hidden = false;
   try {
-    await R.api("/api/launch", { id: g.id });
+    await R.api("/api/launch", { id: g.id, fresh });
     setPlaying({ id: g.id, title: g.title, since: Date.now() / 1000 });
     setTimeout(() => ($("#launching").hidden = true), 1800);
   } catch (e) {
@@ -289,6 +331,129 @@ async function launch(g) {
     if (e.data && e.data.code === "setup") return openSetup(g, e.data.need);
     R.toast(e.message, true);
   }
+}
+
+// ---------- on-screen keyboard (search, names, sign-in) ----------
+const KB_ROWS = ["1234567890", "qwertyuiop", "asdfghjkl'", "zxcvbnm-.&"];
+let kb = null;
+function kbOpen() { return !$("#kb-pop").hidden; }
+/** opts: {title, value, password, live(value) -> html for results, onDone(value)} */
+function openKeyboard(opts) {
+  kb = { ...opts, ret: R.nav.cur, shift: false };
+  $("#kb-kicker").textContent = opts.title || "";
+  const input = $("#kb-input");
+  input.type = opts.password ? "password" : "text";
+  input.value = opts.value || "";
+  input.placeholder = opts.placeholder || "";
+  renderKeys();
+  $("#kb-pop").hidden = false;
+  kbLive();
+  updateBack(); hints();
+  // With a real keyboard, just type; with a controller, use the keys.
+  if (R.nav.usingPad || document.body.classList.contains("has-pad")) R.nav.focus($("#kb-keys [data-nav]"));
+  else { R.nav.cur && R.nav.cur.classList.remove("focus"); input.focus(); }
+}
+function renderKeys() {
+  const sh = kb.shift;
+  $("#kb-keys").innerHTML = KB_ROWS.map((row) => `<div class="kb-row">${[...row].map((ch) => {
+    const c = sh ? ch.toUpperCase() : ch;
+    return `<button class="kb-key" data-nav data-k="${esc(c)}">${esc(c)}</button>`;
+  }).join("")}</div>`).join("")
+  + `<div class="kb-row"><button class="kb-key wide" data-nav data-k="shift">${sh ? "abc" : "ABC"}</button>
+     <button class="kb-key space" data-nav data-k=" ">Space</button>
+     <button class="kb-key wide" data-nav data-k="back">⌫</button>
+     <button class="kb-key wide done" data-nav data-k="done">Done</button></div>`;
+}
+function kbType(k) {
+  const input = $("#kb-input");
+  if (k === "shift") { kb.shift = !kb.shift; const at = R.nav.cur && R.nav.cur.dataset.k; renderKeys(); R.nav.focus($('[data-k="shift"]'), { scroll: false }); return; }
+  if (k === "back") input.value = input.value.slice(0, -1);
+  else if (k === "done") return kbDone();
+  else input.value += k;
+  R.sound("move");
+  kbLive();
+}
+function kbLive() {
+  const box = $("#kb-results");
+  box.innerHTML = kb && kb.live ? kb.live($("#kb-input").value) : "";
+}
+function kbDone() {
+  const v = $("#kb-input").value, k = kb;
+  closeKeyboard();
+  if (k && k.onDone) k.onDone(v);
+}
+function closeKeyboard() {
+  $("#kb-pop").hidden = true;
+  $("#kb-input").blur();
+  const back = kb && kb.ret && document.body.contains(kb.ret) ? kb.ret : null;
+  kb = null;
+  if (back) R.nav.focus(back, { scroll: false });
+  updateBack(); hints();
+}
+function kbButton(btn) {
+  const cur = R.nav.cur;
+  if (btn === "b") { R.sound("back"); closeKeyboard(); return true; }
+  if (btn === "x") { kbType("back"); return true; }
+  if (btn === "y") { kbType(" "); return true; }
+  if (btn === "start") { kbDone(); return true; }
+  if (btn === "a" && cur && cur.dataset.k != null) { kbType(cur.dataset.k); return true; }
+  if (btn === "a" && cur && cur.dataset.game) { const g = S.byId[cur.dataset.game]; closeKeyboard(); launch(g); return true; }
+  return false;
+}
+$("#kb-input").addEventListener("input", kbLive);
+$("#kb-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); if (kb && kb.live) { const first = $("#kb-results [data-game]"); if (first) { const g = S.byId[first.dataset.game]; closeKeyboard(); return launch(g); } } kbDone(); }
+  else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeKeyboard(); }
+  else if (e.key === "ArrowDown") { e.preventDefault(); $("#kb-input").blur(); R.nav.focus($("#kb-results [data-nav]") || $("#kb-keys [data-nav]")); }
+});
+$("#kb-pop").addEventListener("mousedown", (e) => { if (e.target.id === "kb-pop") closeKeyboard(); });
+$("#kb-results").addEventListener("click", (e) => { if (e.target.closest("[data-game]")) setTimeout(closeKeyboard, 0); }, true);
+$("#kb-keys").addEventListener("click", (e) => { const k = e.target.closest("[data-k]"); if (k) { kbType(k.dataset.k); if (!R.nav.usingPad) $("#kb-input").focus(); } });
+
+// ---------- search ----------
+function searchGames(q) {
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const hay = (g) => `${g.title} ${g.label} ${(S.sysById[g.system] || {}).name || ""} ${g.genre || ""} ${g.developer || ""}`.toLowerCase();
+  return visibleGames().filter((g) => { const h = hay(g); return words.every((w) => h.includes(w)); })
+    .sort((a, b) => (b.title.toLowerCase().startsWith(words[0]) - a.title.toLowerCase().startsWith(words[0])) || (b.last - a.last) || a.sort.localeCompare(b.sort))
+    .slice(0, 24);
+}
+function openSearch() {
+  R.sound("select");
+  openKeyboard({ title: "Search", placeholder: "Type a game, system, genre…", live: (q) => {
+    const hits = searchGames(q);
+    if (!q.trim()) return `<p class="hint">Start typing. Results show up here as you go.</p>`;
+    if (!hits.length) return `<p class="hint">Nothing matches “${esc(q)}”.</p>`;
+    return `<div class="rail cards">${hits.map((g) => card(g, `search:${g.id}`)).join("")}</div>`;
+  }, onDone: () => {} });
+}
+document.addEventListener("keydown", (e) => {
+  if (e.key === "/" && !kbOpen() && !(e.target && e.target.tagName === "INPUT")) { e.preventDefault(); openSearch(); }
+});
+
+// ---------- collections ----------
+function chooseCollection(g) {
+  setupGame = g;
+  const cols = (S.config.collections || []).filter((c) => !c.games.includes(g.id));
+  showSetup("Collections", `Add ${g.title} to…`, cols.length ? "" : `<p class="setup-p dim">You don't have any collections yet.</p>`,
+    [...cols.map((c) => [`col-pick-${c.id}`, c.name]), ["col-new", "＋  New collection…"], ["setup-close", "Cancel"]]);
+}
+
+// ---------- RetroAchievements sign-in ----------
+function raLogin() {
+  openKeyboard({ title: "RetroAchievements username", onDone: (user) => {
+    if (!user.trim()) return;
+    setTimeout(() => openKeyboard({ title: `Password for ${user.trim()}`, password: true, onDone: async (password) => {
+      if (!password) return;
+      try {
+        const r = await R.api("/api/ra", { action: "login", user: user.trim(), password });
+        await loadState();
+        R.toast(`Signed in as ${r.user}`);
+      } catch (e) { R.toast(e.message, true); }
+      if (screen === "settings") renderSettings('[data-do="ra-hardcore"]');
+    } }), 50);
+  } });
 }
 
 // ---------- built-in setup ----------
@@ -400,7 +565,7 @@ function openPop(g, surprised = false) {
   $("#pop-art").innerHTML = `${placeholder(g)}<img alt="" src="${art(g)}?t=${Date.now()}" onload="this.parentNode.classList.add('has-art')" onerror="this.remove()">`;
   $("#pop-sys").textContent = (surprised ? "Surprise · " : "") + (s ? s.name : "");
   $("#pop-title").textContent = g.title;
-  const meta = [g.region, R.playtime(g.played), g.plays ? `${g.plays} session${g.plays === 1 ? "" : "s"}` : "", g.last ? `last played ${R.ago(g.last)}` : ""].filter(Boolean);
+  const meta = [g.year, g.genre, g.players > 1 ? `${g.players} players` : "", g.developer, g.region, R.playtime(g.played), g.plays ? `${g.plays} session${g.plays === 1 ? "" : "s"}` : "", g.last ? `last played ${R.ago(g.last)}` : ""].filter(Boolean);
   if (s && s.standalone) meta.push(`plays in ${s.standalone}`);
   $("#pop-meta").innerHTML = meta.map(esc).join(" · ") + `<div class="pop-file">${esc(g.label)}</div>`;
   renderPopActions();
@@ -421,11 +586,14 @@ function coreLabel(g) {
 function renderPopActions(focusDo) {
   const g = popGame;
   $("#pop-actions").innerHTML = [
-    ["play", "▶  Play"],
+    ["play", g.resumable ? "▶  Resume" : "▶  Play"],
+    ...(g.resumable ? [["fresh", "↺  Start over"]] : []),
     ["fav", g.favorite ? "★  Remove from favorites" : "☆  Add to favorites"],
     ...((S.sysById[g.system] || {}).standalone ? [] : [["core", `Core: ${coreLabel(g)}`]]),
     ...(g.core && g.core !== (S.config.system_cores || {})[g.system] ? [["core-all", `Use this core for every ${(S.sysById[g.system] || {}).name || ""} game`]] : []),
     ...(popSurprise ? [["again", "↻  Surprise me again"]] : []),
+    ["collect", "＋  Add to a collection…"],
+    ...((S.config.collections || []).filter((c) => c.games.includes(g.id)).map((c) => [`uncollect-${c.id}`, `−  Remove from ${c.name}`])),
     ...(S.native ? [["art", "Set box art…"]] : []),
     ["hide", "Hide this game"],
   ].map(([d, t]) => `<button class="btn wide" data-nav data-do="pop-${d}">${esc(t)}</button>`).join("");
@@ -558,6 +726,9 @@ const TOGGLES = [
   ["download_art", "Download box art"],
   ["sounds", "Menu sounds"],
   ["controller_nav", "Controller navigation"],
+  ["resume", "Resume games where you left off"],
+  ["quit_combo", "Select + Start quits a game"],
+  ["game_details", "Show game details (year, genre, players)"],
   ["check_updates", "Check for updates when Relic starts"],
 ];
 function renderSettings(focusDo) {
@@ -565,7 +736,8 @@ function renderSettings(focusDo) {
   $("#ra-status").innerHTML = ra.found
     ? `<div class="ok">● Found RetroArch</div><div class="path">${esc(ra.exe)}</div><div class="path">${ra.cores} core${ra.cores === 1 ? "" : "s"} installed${ra.playlists ? ` · playlists in ${esc(ra.playlists)}` : ""}</div>`
     : `<div class="bad">● RetroArch not found</div><div class="path">Relic can download and set it up for you, or choose a copy you already have.</div>`;
-  $("#ra-install").innerHTML = ra.found ? "" : `<button class="btn primary" data-nav data-do="install-ra">Download and set up RetroArch</button>`;
+  $("#ra-install").innerHTML = ra.found ? `<button class="btn" data-nav data-do="pads">Update controller profiles</button>`
+    : `<button class="btn primary" data-nav data-do="install-ra">Download and set up RetroArch</button>`;
   const emus = [...(S.emulators || [])].sort((a, b) => (b.has_games - a.has_games));
   $("#emulators").innerHTML = emus.map((e) => `<button class="btn folder emu" data-nav data-do="pick-emu" data-sid="${e.id}">
       <span class="emu-name">${esc(e.system)} · ${esc(e.name)}</span>
@@ -584,6 +756,21 @@ function renderSettings(focusDo) {
     `<button class="btn theme${t.id === S.config.theme ? " on" : ""}" data-nav data-do="theme" data-id="${t.id}">
       <span class="sw">${(t.swatch || []).map((c) => `<i style="background:${esc(c)}"></i>`).join("")}</span>${esc(t.name)}</button>`).join("");
   renderControls();
+  const crt = S.config.crt || "off";
+  $("#crt-opts").innerHTML = [["off", "Off"], ["retro", "Retro consoles"], ["all", "Everything"]].map(([v, t]) =>
+    `<button class="btn theme${crt === v ? " on" : ""}" data-nav data-do="crt" data-v="${v}">${t}</button>`).join("");
+  $("#bios-status").innerHTML = S.config.bios_dir ? `<p class="hint">Importing from <span class="mono">${esc(S.config.bios_dir)}</span></p>` : "";
+  const ach = S.config.retroachievements || {};
+  $("#ra-box").innerHTML = ach.user
+    ? `<p class="hint">Signed in as <b>${esc(ach.user)}</b>. Achievements pop up while you play RetroArch games.</p>
+       <button class="btn toggle${ach.hardcore ? " on" : ""}" data-nav data-do="ra-hardcore"><span>Hardcore mode</span><i></i></button>
+       <button class="btn" data-nav data-do="ra-logout">Sign out</button>`
+    : `<p class="hint">Earn achievements in classic games. Sign in with your free retroachievements.org account; Relic keeps only a sign-in token, never your password.</p>
+       <button class="btn" data-nav data-do="ra-login">Sign in to RetroAchievements…</button>`;
+  const cols = S.config.collections || [];
+  $("#cols-box").innerHTML = (cols.length ? cols.map((c) => `<button class="btn folder" data-nav data-do="col-delete" data-cid="${c.id}"><span class="emu-name">${esc(c.name)} · ${c.games.length} game${c.games.length === 1 ? "" : "s"}</span><em>Delete</em></button>`).join("")
+    : `<p class="hint dim">No collections yet. Press Y on a game and choose Add to a collection.</p>`)
+    + `<button class="btn" data-nav data-do="col-new">New collection…</button>`;
   $("#ver").textContent = S.version;
   const hidden = S.games.filter((g) => g.hidden).length;
   $("#set-extra").innerHTML = (hidden ? `<button class="btn" data-nav data-do="unhide">Show ${hidden} hidden game${hidden === 1 ? "" : "s"} again</button>` : "")
@@ -675,6 +862,67 @@ async function doAction(el) {
       applyTheme(el.dataset.id);
       return renderSettings(`[data-id="${el.dataset.id}"]`);
     }
+    if (d === "search") return openSearch();
+    if (d === "filter-players") return cycleFilter("players");
+    if (d === "filter-genre") return cycleFilter("genre");
+    if (d === "pop-fresh") { const g = popGame; closePop(); return launch(g, true); }
+    if (d === "pop-collect") return chooseCollection(popGame);
+    if (d && d.startsWith("pop-uncollect-")) {
+      const r = await R.api("/api/collections", { action: "remove", cid: d.slice(14), game: popGame.id });
+      S.config.collections = r.collections;
+      R.toast("Removed");
+      return renderPopActions("collect");
+    }
+    if (d && d.startsWith("col-pick-")) {
+      const g = setupGame, cid = d.slice(9);
+      const r = await R.api("/api/collections", { action: "add", cid, game: g.id });
+      S.config.collections = r.collections;
+      closeSetup();
+      R.toast(`Added to ${r.collections.find((c) => c.id === cid).name}`);
+      if (!$("#game-pop").hidden) renderPopActions("collect");
+      return;
+    }
+    if (d === "col-new") {
+      const g = setupGame;
+      closeSetup();
+      return openKeyboard({ title: "Name your collection", onDone: async (name) => {
+        if (!name.trim()) return;
+        const r = await R.api("/api/collections", { action: "create", name, game: g && g.id });
+        S.config.collections = r.collections;
+        R.toast(`Made ${name.trim()}`);
+        if (!$("#game-pop").hidden) renderPopActions("collect");
+        if (screen === "settings") renderSettings();
+      } });
+    }
+    if (d === "col-delete") {
+      if (el.dataset.armed !== "1") { el.dataset.armed = "1"; el.classList.add("armed"); el.querySelector("em").textContent = "Press again to delete"; return; }
+      const r = await R.api("/api/collections", { action: "delete", cid: el.dataset.cid });
+      S.config.collections = r.collections;
+      return renderSettings('[data-do="bios-import"]');
+    }
+    if (d === "crt") {
+      await R.setConfig({ crt: el.dataset.v });
+      R.toast({ off: "CRT look off", retro: "CRT look on for retro consoles", all: "CRT look on for everything" }[el.dataset.v]);
+      return renderSettings(`[data-do="crt"][data-v="${el.dataset.v}"]`);
+    }
+    if (d === "bios-import") {
+      const p = await pickFolder();
+      if (!p) return;
+      const r = await R.api("/api/bios", { path: p });
+      await loadState();
+      renderSettings('[data-do="bios-import"]');
+      return R.toast(r.found.length ? `Put ${r.found.length} BIOS file${r.found.length === 1 ? "" : "s"} in place` : "No BIOS files found in that folder", !r.found.length);
+    }
+    if (d === "ra-login") return raLogin();
+    if (d === "ra-logout") { await R.api("/api/ra", { action: "logout" }); await loadState(); R.toast("Signed out of RetroAchievements"); return renderSettings('[data-do="ra-login"]'); }
+    if (d === "ra-hardcore") {
+      const on = !(S.config.retroachievements || {}).hardcore;
+      await R.api("/api/ra", { action: "hardcore", on });
+      await loadState();
+      R.toast(on ? "Hardcore on: no save states or rewind, achievements count double" : "Hardcore off");
+      return renderSettings('[data-do="ra-hardcore"]');
+    }
+    if (d === "pads") { setupGame = null; return runSetup({ action: "assets", kind: "autoconfig" }, "Controller profiles", () => { closeSetup(); R.toast("Controller profiles updated"); }); }
     if (d === "setup-close") { R.sound("back"); return closeSetup(); }
     if (d === "setup-settings") { closeSetup(); return openSettings(); }
     if (d === "setup-go") {
@@ -755,6 +1003,7 @@ R.nav.on((btn) => {
   const cur = R.nav.cur;
   const g = cur && cur.dataset.game && S.byId[cur.dataset.game];
   if (!$("#launching").hidden || R.nav.capturing) return true;
+  if (kbOpen()) return kbButton(btn);
   if (setupOpen()) {
     if (btn === "b") { R.sound("back"); closeSetup(); return true; }
     return !(btn === "a" || btn === "up" || btn === "down" || btn === "left" || btn === "right");

@@ -57,6 +57,8 @@ class Library:
         self.rev = 0                         # goes up whenever the library changes
         self._changed = threading.Condition()
         self.scanned_at = 0.0
+        self.after_scan: list = []  # run after every scan (game details, BIOS checks)
+        self.on_refresh: list = []
 
     # ------------------------------------------------------------- loading
     def start(self) -> None:
@@ -117,7 +119,24 @@ class Library:
                      "" if changed else " (no change)")
             if changed or not (self.cache_path and self.cache_path.exists()):
                 self._save_cache()
+            for fn in list(self.after_scan):
+                try:
+                    fn()
+                except Exception:
+                    log.exception("after-scan step failed")
             return changed
+
+
+    def bump(self) -> None:
+        """Something about the games changed outside a scan (game details arrived): tell the page."""
+        with self._changed:
+            self.rev += 1
+            self._changed.notify_all()
+        for fn in list(self.on_refresh):
+            try:
+                fn()
+            except Exception:
+                log.exception("library listener failed")
 
     def wait(self, rev: int, timeout: float = 25) -> int:
         """Block until the library is newer than `rev` (or the timeout). Returns the current rev."""

@@ -120,6 +120,18 @@ class Setup:
             steps.append({"kind": "retroarch", "label": "RetroArch"})
         if not self.library.core_path(game, meta) and s and s.cores:
             steps.append({"kind": "core", "id": s.cores[0], "options": list(s.cores), "label": f"{s.name} core"})
+        if steps or self.ra.found:
+            import extras
+            ac = self.ra.autoconfig_dir
+            if not self.ra.found or not ac or not ac.is_dir() or not any(ac.iterdir()):
+                steps.append({"kind": "autoconfig", "label": "Controller profiles"})
+            if (self.config["crt"] or "off") != "off" and (not self.ra.found or not extras.crt_shader(self.ra, self.config, sid)) \
+                    and (self.config["crt"] == "all" or sid in extras.RETRO_CRT):
+                steps.append({"kind": "shaders", "label": "CRT shaders"})
+        if steps and all(st["kind"] in ("autoconfig", "shaders") for st in steps) and self.ra.found:
+            # Only extras missing: get them quietly, don't hold up the game.
+            self.start(steps)
+            steps = []
         if s:
             bios = self.missing_bios(sid)
         return {"steps": steps, "bios": bios, "manual": ""}
@@ -173,6 +185,17 @@ class Setup:
                     self.install_core(st.get("options") or [st["id"]])
                 elif st["kind"] == "standalone":
                     self.install_standalone(st["id"])
+                elif st["kind"] == "autoconfig":
+                    self.install_assets("autoconfig.zip", self.ra.autoconfig_dir, "controller profiles", optional=True)
+                elif st["kind"] == "shaders":
+                    d = self.ra.shaders_dir
+                    self.install_assets("shaders_slang.zip", d / "shaders_slang" if d else None, "CRT shaders", optional=True)
+            if self.config["bios_dir"] and self.ra.system_dir:  # your BIOS folder: put any new ones in place
+                try:
+                    import extras
+                    extras.import_bios(Path(self.config["bios_dir"]), self.ra.system_dir)
+                except Exception:
+                    log.info("BIOS re-import skipped")
             self.library.refresh()
             self._set(busy=False, done=True, phase="Ready", progress=1.0)
         except Exception as e:
@@ -233,6 +256,22 @@ class Setup:
         except Exception:
             log.info("core info download failed; cores still work")
         log.info("setup: RetroArch %s installed at %s", ver, folder)
+
+    # ------------------------------------------------------------- RetroArch's extra files
+    def install_assets(self, name: str, dest: Path | None, label: str, optional: bool = False) -> None:
+        """Controller profiles, shaders: the same packs RetroArch's Online Updater downloads."""
+        if not dest:
+            return
+        try:
+            archive = self._download(f"{BUILDBOT}/assets/frontend/{name}", label)
+            self._set(phase=f"Installing {label}", progress=None)
+            _safe_extract(archive, dest)
+            shutil.rmtree(archive.parent, ignore_errors=True)
+            log.info("setup: %s installed into %s", label, dest)
+        except Exception:
+            if not optional:
+                raise
+            log.exception("setup: %s failed (games still run)", label)
 
     # ------------------------------------------------------------- cores
     def install_core(self, options: list[str]) -> str:

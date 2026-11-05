@@ -23,6 +23,13 @@ DEFAULTS = {
     "emulators": {},            # {"ps4": "C:\\...\\shadPS4.exe"}: standalone emulators you chose
     "pad_map": {},              # {"a": 1, "b": 0}: your controller layout (standard button numbers)
     "key_map": {},              # {"x": ["g"]}: your keyboard layout
+    "resume": True,             # RetroArch saves when you quit and picks up there next time
+    "quit_combo": True,         # Select + Start closes the game and you're back in Relic
+    "crt": "off",               # off | retro | all: RetroArch's CRT shader
+    "game_details": True,       # download year/genre/players from libretro's game database
+    "retroachievements": {},    # {"user", "token", "hardcore"}: never the password
+    "collections": [],          # [{"id", "name", "games": [game ids]}]
+    "bios_dir": "",             # where your BIOS files are; Relic re-imports from it after new installs
     "check_updates": True,      # look for a new Relic on GitHub when it starts
     "seen_version": "",
 }

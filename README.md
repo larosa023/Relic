@@ -21,6 +21,12 @@ Relic reads what RetroArch already knows (its playlists, cores and thumbnails) a
 - **One copy at a time**: opening Relic again brings the open window to the front. **Settings → Quit Relic** closes it from the controller.
 - **Your buttons**: Settings → Controller remaps every action to any controller button or key (pick the action, press the button). There's a one-press Nintendo layout that swaps A/B and X/Y. Hints on screen always show your layout.
 - **Window**: in a window, drag any edge or corner to resize (Windows snapping works). Drag the top bar to move it, or double-click the bar to maximize.
+- **Like a console**: **Select + Start** quits any game back to Relic (RetroArch and the standalone emulators). RetroArch saves when you quit, so games offer **Resume** or **Start over**. Controller profiles are installed for you, so Xbox, PlayStation, 8BitDo and Switch Pro pads just work.
+- **Game details and search**: year, genre, players and developer from libretro's game database. Filter a shelf by players or genre, and search everything with the on-screen keyboard (or press `/`).
+- **Collections**: make your own shelves (Y → Add to a collection); they show on the home screen.
+- **CRT look**: off, retro consoles only, or everything (Settings → CRT look).
+- **RetroAchievements**: sign in once in Settings (Relic keeps a token, not your password), with an optional hardcore mode.
+- **BIOS import**: point Relic at the folder with your BIOS dumps; it recognises them and puts each where its emulator looks, now and after every new install.
 - **Themes**: Relic, Arcade, Phosphor (with scanlines), Console Gray, Dot Matrix, Famicom, Vaporwave, Midnight, Sakura, Swirl, OLED Black and Paper (light). You can drop your own `.css` themes into `%APPDATA%\Relic\themes`.
 
 ## Run it
@@ -46,6 +52,7 @@ Options: `--windowed` starts in a window, and `--browser` runs it in your web br
 | `art.py` | box art, screenshots and title screens |
 | `updater.py`, `install.py` | checking GitHub releases, downloading and swapping in updates, shortcuts |
 | `setup_wizard.py`, `standalone.py` | downloading RetroArch, cores and emulators; BIOS checks; launching standalone emulators |
+| `extras.py`, `metadata.py` | per-launch RetroArch settings (quit combo, resume, achievements, CRT), BIOS import, game details |
 | `gamedata.py` | favorites, per-game core, play sessions |
 | `server.py` | the local API the UI talks to (127.0.0.1 only) |
 | `ui/` | the couch UI: `core.js` helpers, `pad.js` controller and keyboard, `app.js` screens |

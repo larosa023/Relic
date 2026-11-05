@@ -19,6 +19,15 @@ from version import VERSION
 THEME_META = re.compile(r"@(\w+)\s+([^\n*]+)")
 
 
+def _public_config(cfg) -> dict:
+    """Settings for the page, minus the RetroAchievements sign-in token."""
+    d = cfg.public()
+    ra = dict(d.get("retroachievements") or {})
+    ra.pop("token", None)
+    d["retroachievements"] = ra
+    return d
+
+
 def list_themes(dirs: list[Path]) -> list[dict]:
     themes: dict[str, dict] = {}
     for d in dirs:
@@ -32,7 +41,8 @@ def list_themes(dirs: list[Path]) -> list[dict]:
 
 class Context:
     def __init__(self, *, token, ra, library, art, config, meta, sessions, player,
-                 ui_dir, theme_dirs, data_dir, window_api=None, updater=None, restart=None, activate=None, setup=None):
+                 ui_dir, theme_dirs, data_dir, window_api=None, updater=None, restart=None, activate=None, setup=None,
+                 details=None, states=None):
         self.token, self.ra, self.library, self.art = token, ra, library, art
         self.config, self.meta, self.sessions, self.player = config, meta, sessions, player
         self.ui_dir, self.theme_dirs, self.data_dir = ui_dir, theme_dirs, data_dir
@@ -41,6 +51,8 @@ class Context:
         self.restart = restart or (lambda: None)
         self.activate = activate or (lambda: None)
         self.setup = setup
+        self.details = details
+        self.states = states
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -161,7 +173,7 @@ class Handler(BaseHTTPRequestHandler):
         ra = c.ra
         return {
             "version": VERSION,
-            "config": c.config.public(),
+            "config": _public_config(c.config),
             "themes": list_themes(c.theme_dirs),
             "native": bool(c.window_api),
             "playing": c.player.snapshot(),
@@ -183,10 +195,13 @@ class Handler(BaseHTTPRequestHandler):
             c.library.refresh()
         games = c.library.games()
         totals = c.sessions.totals()
+        details = c.config["game_details"] and c.details
         out = []
         for g in games:
             m = c.meta.get(g["id"])
             t = totals.get(g["id"], {})
+            s = c.library.system(g["system"])
+            info = c.details.get(s.db, g["label"]) if details and s else {}
             out.append({k: g[k] for k in ("id", "title", "label", "sort", "system", "region", "source")} | {
                 "added": g.get("added", 0),
                 "favorite": bool(m.get("favorite")),
@@ -196,6 +211,8 @@ class Handler(BaseHTTPRequestHandler):
                 "played": t.get("seconds", 0),
                 "last": t.get("last", 0),
                 "plays": t.get("plays", 0),
+                "resumable": bool(c.states and g["system"] not in standalone.EMULATORS and c.states.has(g["path"])),
+                **{k: info[k] for k in ("year", "genre", "players", "developer", "publisher") if k in info},
             })
         return {"games": out, "systems": c.library.systems_public(), "rev": c.library.rev}
 
@@ -216,14 +233,14 @@ class Handler(BaseHTTPRequestHandler):
                     c.ra.find(c.config["retroarch_path"] or None)
                 if any(c.config[k] != v for k, v in before.items()):
                     c.library.refresh()
-                return self._json({"ok": True, "config": c.config.public()})
+                return self._json({"ok": True, "config": _public_config(c.config)})
             if path == "/api/meta":
                 g = c.library.get(str(body.get("id", "")))
                 if not g:
                     return self._json({"ok": False, "error": "No such game"}, 404)
                 return self._json({"ok": True, "meta": c.meta.update(g["id"], body.get("changes") or {})})
             if path == "/api/launch":
-                return self._launch(str(body.get("id", "")))
+                return self._launch(str(body.get("id", "")), bool(body.get("fresh")))
             if path == "/api/rescan":
                 c.ra.find(c.config["retroarch_path"] or None)
                 c.art.forget_misses()
@@ -232,6 +249,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._update(body.get("action"))
             if path == "/api/setup":
                 return self._setup(body)
+            if path == "/api/bios":
+                return self._bios(body)
+            if path == "/api/ra":
+                return self._ra(body)
+            if path == "/api/collections":
+                return self._collections(body)
             if path == "/api/customart":
                 return self._custom_art(body)
             if path == "/api/activate":  # a second copy of Relic was opened: show this one
@@ -247,7 +270,7 @@ class Handler(BaseHTTPRequestHandler):
             log.exception("POST %s failed", path)
             return self._json({"ok": False, "error": f"Something went wrong ({type(e).__name__})"}, 500)
 
-    def _launch(self, gid: str):
+    def _launch(self, gid: str, fresh: bool = False):
         c = self.ctx
         g = c.library.get(gid)
         if not g:
@@ -266,7 +289,12 @@ class Handler(BaseHTTPRequestHandler):
             raise RuntimeError(f"No core installed for {s.name if s else 'this system'}. "
                                f"Get {want} from RetroArch's Online Updater → Core Downloader.")
         fs = bool(c.config["launch_fullscreen"])
-        c.player.run(g, lambda: c.ra.launch(core, g["path"], fs))
+        import extras
+        override = extras.write_override(c.data_dir / "relic-retroarch.cfg", c.config, resume=not fresh)
+        shader = extras.crt_shader(c.ra, c.config, g["system"])
+        if c.states:
+            c.states.forget()
+        c.player.run(g, lambda: c.ra.launch(core, g["path"], fs, append_cfg=override, shader=shader))
         return self._json({"ok": True, "core": Path(core).name})
 
     def _setup(self, body):
@@ -294,6 +322,13 @@ class Handler(BaseHTTPRequestHandler):
             if not c.setup.start([{"kind": "standalone", "id": sid, "label": standalone.EMULATORS[sid]["name"]}]):
                 raise RuntimeError("Already setting something up")
             return self._json({"ok": True} | c.setup.snapshot())
+        if act == "assets":
+            kind = str(body.get("kind", ""))
+            if kind not in ("autoconfig", "shaders") or not c.ra.found:
+                raise RuntimeError("Set up RetroArch first")
+            if not c.setup.start([{"kind": kind, "label": "Controller profiles" if kind == "autoconfig" else "CRT shaders"}]):
+                raise RuntimeError("Already setting something up")
+            return self._json({"ok": True} | c.setup.snapshot())
         if act == "open_bios":
             g = c.library.get(str(body.get("id", "")))
             b = c.setup.missing_bios(g["system"]) if g else None
@@ -306,6 +341,65 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True, "folder": str(folder)})
         return self._json({"ok": False, "error": "unknown"}, 404)
 
+    def _bios(self, body):
+        import extras
+        c = self.ctx
+        src = Path(str(body.get("path") or c.config["bios_dir"] or ""))
+        sysdir = c.ra.system_dir
+        if not sysdir:
+            raise RuntimeError("Set up RetroArch first, then import your BIOS files.")
+        found = extras.import_bios(src, sysdir)
+        c.config.update({"bios_dir": str(src)})
+        return self._json({"ok": True, "found": found})
+
+    def _ra(self, body):
+        import extras
+        c = self.ctx
+        act = body.get("action")
+        if act == "login":
+            user, pw = str(body.get("user", "")).strip(), str(body.get("password", ""))
+            if not user or not pw:
+                raise RuntimeError("Enter your RetroAchievements username and password.")
+            info = extras.ra_login(user, pw)
+            c.config.update({"retroachievements": {"user": info["user"], "token": info["token"],
+                                                   "hardcore": bool((c.config["retroachievements"] or {}).get("hardcore"))}})
+            return self._json({"ok": True, "user": info["user"], "score": info.get("score", 0)})
+        if act == "logout":
+            c.config.update({"retroachievements": {}})
+            return self._json({"ok": True})
+        if act == "hardcore":
+            ra = dict(c.config["retroachievements"] or {})
+            ra["hardcore"] = bool(body.get("on"))
+            c.config.update({"retroachievements": ra})
+            return self._json({"ok": True})
+        return self._json({"ok": False, "error": "unknown"}, 404)
+
+    def _collections(self, body):
+        """Your own shelves. Actions: create (name, game?), add/remove (cid, game), rename (cid, name), delete (cid)."""
+        import secrets
+        c = self.ctx
+        cols = [dict(x, games=list(x.get("games", []))) for x in (c.config["collections"] or [])]
+        act, cid, gid = body.get("action"), body.get("cid"), body.get("game")
+        col = next((x for x in cols if x["id"] == cid), None)
+        if act == "create":
+            name = str(body.get("name", "")).strip()[:40]
+            if not name:
+                raise RuntimeError("Give the collection a name.")
+            col = {"id": secrets.token_hex(4), "name": name, "games": [gid] if gid else []}
+            cols.append(col)
+        elif not col:
+            return self._json({"ok": False, "error": "No such collection"}, 404)
+        elif act == "add" and gid and gid not in col["games"]:
+            col["games"].insert(0, gid)
+        elif act == "remove":
+            col["games"] = [x for x in col["games"] if x != gid]
+        elif act == "rename":
+            col["name"] = str(body.get("name", "")).strip()[:40] or col["name"]
+        elif act == "delete":
+            cols = [x for x in cols if x["id"] != cid]
+        c.config.update({"collections": cols})
+        return self._json({"ok": True, "collections": cols, "id": col["id"] if col else ""})
+
     def _launch_standalone(self, g):
         c = self.ctx
         sid = g["system"]
@@ -316,7 +410,7 @@ class Handler(BaseHTTPRequestHandler):
             raise RuntimeError(f"{s.name} games run in {emu['name']}, which isn't on this PC yet. "
                                f"Get it from {emu['site']}, then choose it in Settings → Other emulators.")
         fs = bool(c.config["launch_fullscreen"])
-        c.player.run(g, lambda: standalone.launch(sid, exe, g["path"], fs))
+        c.player.run(g, lambda: standalone.launch(sid, exe, g["path"], fs), watch_combo=bool(c.config["quit_combo"]))
         return self._json({"ok": True, "core": exe.name})
 
     def _emulators(self) -> list[dict]:
