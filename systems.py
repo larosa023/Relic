@@ -29,6 +29,10 @@ SYSTEMS = [
      ["gcm", "gcz"], ["dolphin"]),
     ("wii", "Wii", "Nintendo - Wii", "Nintendo", 2006,
      ["wbfs", "wad"], ["dolphin"]),
+    ("wiiu", "Wii U", "Nintendo - Wii U", "Nintendo", 2012,
+     ["wua", "wud", "wux", "rpx"], []),
+    ("switch", "Switch", "Nintendo - Switch", "Nintendo", 2017,
+     ["nsp", "xci", "nca"], []),
     ("gw", "Game & Watch", "Handheld Electronic Game", "Nintendo", 1980,
      ["mgw"], ["gw"]),
     ("gb", "Game Boy", "Nintendo - Game Boy", "Nintendo", 1989,
@@ -71,6 +75,16 @@ SYSTEMS = [
      [], ["pcsx2", "play"]),
     ("psp", "PSP", "Sony - PlayStation Portable", "Sony", 2005,
      [], ["ppsspp"]),
+    # These run in their own emulator, not RetroArch (see standalone.py). Games can be folders.
+    ("ps3", "PlayStation 3", "Sony - PlayStation 3", "Sony", 2006,
+     [], []),
+    ("ps4", "PlayStation 4", "Sony - PlayStation 4", "Sony", 2013,
+     [], []),
+    # ---- Microsoft (own emulators too)
+    ("xbox", "Xbox", "Microsoft - Xbox", "Microsoft", 2001,
+     ["xiso"], []),
+    ("xbox360", "Xbox 360", "Microsoft - Xbox 360", "Microsoft", 2005,
+     ["xex"], []),
     # ---- NEC
     ("pce", "TurboGrafx-16", "NEC - PC Engine - TurboGrafx 16", "NEC", 1989,
      ["pce"], ["mednafen_pce_fast", "mednafen_pce", "geargrafx"]),
@@ -149,7 +163,7 @@ SYSTEMS = [
 
 # File types that several systems share: Relic decides by the folder name instead.
 SHARED_EXT = {"cue", "chd", "iso", "m3u", "zip", "7z", "bin", "img", "ccd", "mds", "cso", "rvz",
-              "rom", "dsk", "tap", "sna", "hdf", "ciso", "pbp", "exe", "bat", "elf"}
+              "rom", "dsk", "tap", "sna", "xex", "hdf", "ciso", "pbp", "exe", "bat", "elf"}
 
 # Words people use for their ROM folders, mapped to a system id (lowercase, letters and digits only).
 FOLDER_ALIASES = {
@@ -180,6 +194,12 @@ FOLDER_ALIASES = {
     "psx": "psx", "ps1": "psx", "ps": "psx", "playstation": "psx", "psone": "psx", "playstation1": "psx", "sonyplaystation": "psx",
     "ps2": "ps2", "playstation2": "ps2", "sonyplaystation2": "ps2",
     "psp": "psp", "playstationportable": "psp",
+    "ps3": "ps3", "playstation3": "ps3", "sonyplaystation3": "ps3",
+    "ps4": "ps4", "playstation4": "ps4", "sonyplaystation4": "ps4",
+    "wiiu": "wiiu", "nintendowiiu": "wiiu",
+    "switch": "switch", "nintendoswitch": "switch", "ns": "switch", "nsw": "switch",
+    "xbox": "xbox", "ogxbox": "xbox", "originalxbox": "xbox", "microsoftxbox": "xbox",
+    "xbox360": "xbox360", "x360": "xbox360", "360": "xbox360", "microsoftxbox360": "xbox360",
     "pce": "pce", "pcengine": "pce", "tg16": "pce", "turbografx": "pce", "turbografx16": "pce",
     "pcecd": "pcecd", "pcenginecd": "pcecd", "tgcd": "pcecd", "turbografxcd": "pcecd", "tg16cd": "pcecd",
     "sgx": "sgx", "supergrafx": "sgx",

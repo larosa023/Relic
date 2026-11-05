@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 import art as artmod
+import standalone
 from reliclog import log
 from version import VERSION
 
@@ -160,6 +161,7 @@ class Handler(BaseHTTPRequestHandler):
             "native": bool(c.window_api),
             "playing": c.player.snapshot(),
             "update": c.updater.snapshot() if c.updater else None,
+            "emulators": self._emulators(),
             "retroarch": {
                 "found": ra.found,
                 "exe": str(ra.exe or ""),
@@ -242,6 +244,8 @@ class Handler(BaseHTTPRequestHandler):
         g = c.library.get(gid)
         if not g:
             return self._json({"ok": False, "error": "No such game"}, 404)
+        if g["system"] in standalone.EMULATORS:
+            return self._launch_standalone(g)
         core = c.library.core_path(g, c.meta.get(gid))
         if not core:
             s = c.library.system(g["system"])
@@ -251,6 +255,32 @@ class Handler(BaseHTTPRequestHandler):
         fs = bool(c.config["launch_fullscreen"])
         c.player.run(g, lambda: c.ra.launch(core, g["path"], fs))
         return self._json({"ok": True, "core": Path(core).name})
+
+    def _launch_standalone(self, g):
+        c = self.ctx
+        sid = g["system"]
+        emu = standalone.EMULATORS[sid]
+        exe = standalone.find(sid, (c.config["emulators"] or {}).get(sid, ""))
+        if not exe:
+            s = c.library.system(sid)
+            raise RuntimeError(f"{s.name} games run in {emu['name']}, which isn't on this PC yet. "
+                               f"Get it from {emu['site']}, then choose it in Settings → Other emulators.")
+        fs = bool(c.config["launch_fullscreen"])
+        c.player.run(g, lambda: standalone.launch(sid, exe, g["path"], fs))
+        return self._json({"ok": True, "core": exe.name})
+
+    def _emulators(self) -> list[dict]:
+        """Standalone emulators, for Settings: which systems they're for and whether Relic can find them."""
+        c = self.ctx
+        have = {g["system"] for g in c.library.games()}
+        chosen = c.config["emulators"] or {}
+        out = []
+        for sid, emu in standalone.EMULATORS.items():
+            s = c.library.system(sid)
+            exe = standalone.find(sid, chosen.get(sid, ""))
+            out.append({"id": sid, "system": s.name if s else sid, "name": emu["name"], "site": emu["site"],
+                        "exe": str(exe or ""), "has_games": sid in have})
+        return out
 
     def _update(self, action):
         u = self.ctx.updater

@@ -148,6 +148,10 @@ button { font: inherit; color: inherit; }
 .btn.folder span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: .85em; }
 .btn.folder em { font-style: normal; font-size: .8em; opacity: .7; flex: none; }
 .btn.folder.armed em { opacity: 1; }
+.btn.folder.emu span { font-family: var(--font); font-size: 1em; }
+.btn.folder.emu em.ok { color: #6fd08c; opacity: 1; }
+.btn.folder.emu.focus em.ok { color: inherit; }
+.emu-path { font-family: var(--mono); font-size: .75em; color: var(--dim); margin: -.3em 0 .7em .3em; word-break: break-all; }
 .btn.toggle { width: 100%; justify-content: space-between; }
 .btn.toggle i { flex: none; width: 2.6em; height: 1.45em; border-radius: 99px; background: var(--surface-2); position: relative; transition: background .15s; }
 .btn.toggle i::after { content: ""; position: absolute; top: .2em; left: .2em; width: 1.05em; height: 1.05em; border-radius: 50%; background: var(--dim); transition: transform .15s, background .15s; }

@@ -20,6 +20,7 @@ DEFAULTS = {
     "sounds": True,
     "shelf_sort": "title",      # title | recent | played
     "controller_nav": True,
+    "emulators": {},            # {"ps4": "C:\\...\\shadPS4.exe"}: standalone emulators you chose
     "pad_map": {},              # {"a": 1, "b": 0}: your controller layout (standard button numbers)
     "key_map": {},              # {"x": ["g"]}: your keyboard layout
     "check_updates": True,      # look for a new Relic on GitHub when it starts

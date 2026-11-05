@@ -122,7 +122,7 @@ class WindowApi:
     def pick_file(self, kind="any"):
         import webview
         types = {"image": ("Images (*.png;*.jpg;*.jpeg;*.webp)",),
-                 "exe": ("RetroArch (retroarch.exe)", "Programs (*.exe)")}.get(kind, ("All files (*.*)",))
+                 "exe": ("Programs (*.exe)", "All files (*.*)")}.get(kind, ("All files (*.*)",))
         r = self._window.create_file_dialog(webview.OPEN_DIALOG, file_types=types)
         return (r[0] if r else "") or ""
 

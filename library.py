@@ -10,6 +10,7 @@ import threading
 import time
 from pathlib import Path
 
+import standalone
 import systems
 from systems import System
 from reliclog import log
@@ -156,6 +157,7 @@ class Library:
             d = s.public()
             d["count"] = n
             d["cores"] = self.cores_for(s)
+            d["standalone"] = standalone.EMULATORS[sid]["name"] if sid in standalone.EMULATORS else ""
             out.append(d)
         out.sort(key=lambda d: (order.index(d["id"]) if d["id"] in order else 999, d["name"]))
         return out
@@ -262,7 +264,31 @@ class Library:
             dirnames[:] = [d for d in dirnames if d.lower() not in SKIP_DIRS and not d.startswith(".")]
             # A subfolder named after a system beats the folder above it.
             here = systems.from_folder(Path(dirpath).name) if Path(dirpath) != folder else None
-            self._scan_files(seen, Path(dirpath), filenames, here or s)
+            cur = here or s
+            if cur and cur.id in ("ps3", "ps4") and self._folder_game(seen, Path(dirpath), filenames, dirnames, cur):
+                dirnames[:] = []  # a game folder: don't look inside it for more games
+                continue
+            self._scan_files(seen, Path(dirpath), filenames, cur)
+
+    def _folder_game(self, seen, d: Path, filenames, dirnames, s: System) -> bool:
+        """PS4 games are folders with eboot.bin and sce_sys; PS3 games have PS3_GAME/USRDIR/EBOOT.BIN."""
+        lower = {f.lower(): f for f in filenames}
+        if s.id == "ps4" and "eboot.bin" in lower:
+            title = standalone.sfo_title(d / "sce_sys" / "param.sfo") or d.name
+            self._add(seen, str(d / lower["eboot.bin"]), title, s, "scan")
+            return True
+        if s.id == "ps3":
+            sub = {x.lower(): x for x in dirnames}
+            if "ps3_game" in sub:
+                base = d / sub["ps3_game"]
+                title = standalone.sfo_title(base / "PARAM.SFO") or d.name
+                self._add(seen, str(base / "USRDIR" / "EBOOT.BIN"), title, s, "scan")
+                return True
+            if "eboot.bin" in lower and d.name.lower() == "usrdir":
+                title = standalone.sfo_title(d.parent / "PARAM.SFO") or d.parent.name
+                self._add(seen, str(d / lower["eboot.bin"]), title, s, "scan")
+                return True
+        return False
 
     def _scan_files(self, seen, dirpath: Path, filenames: list[str], s: System | None):
         lower = {f.lower() for f in filenames}
@@ -303,4 +329,8 @@ class Library:
                 continue
             if has_m3u and DISC.search(f) and not fl.endswith(".m3u"):
                 continue  # one entry per multi-disc game
-            self._add(seen, str(dirpath / f), Path(f).stem, sys_, "scan")
+            label = Path(f).stem
+            # "default.xex" or "code/game.rpx": the game's name is the folder it's in.
+            if label.lower() in ("default", "eboot", "main") or dirpath.name.lower() == "code":
+                label = (dirpath.parent if dirpath.name.lower() == "code" else dirpath).name
+            self._add(seen, str(dirpath / f), label, sys_, "scan")

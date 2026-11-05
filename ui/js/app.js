@@ -13,7 +13,7 @@ const SORT_LABEL = { title: "A–Z", recent: "Recently played", played: "Most pl
 // ---------- loading ----------
 async function loadState() {
   const st = await R.api("/api/state");
-  S.config = st.config; S.themes = st.themes; S.ra = st.retroarch; S.native = st.native; S.version = st.version;
+  S.config = st.config; S.themes = st.themes; S.emulators = st.emulators || []; S.ra = st.retroarch; S.native = st.native; S.version = st.version;
   setPlaying(st.playing);
   applyTheme(S.config.theme);
   R.nav.applyMaps(S.config);
@@ -323,6 +323,7 @@ function openPop(g, surprised = false) {
   $("#pop-sys").textContent = (surprised ? "Surprise · " : "") + (s ? s.name : "");
   $("#pop-title").textContent = g.title;
   const meta = [g.region, R.playtime(g.played), g.plays ? `${g.plays} session${g.plays === 1 ? "" : "s"}` : "", g.last ? `last played ${R.ago(g.last)}` : ""].filter(Boolean);
+  if (s && s.standalone) meta.push(`plays in ${s.standalone}`);
   $("#pop-meta").innerHTML = meta.map(esc).join(" · ") + `<div class="pop-file">${esc(g.label)}</div>`;
   renderPopActions();
   $("#game-pop").hidden = false;
@@ -344,7 +345,7 @@ function renderPopActions(focusDo) {
   $("#pop-actions").innerHTML = [
     ["play", "▶  Play"],
     ["fav", g.favorite ? "★  Remove from favorites" : "☆  Add to favorites"],
-    ["core", `Core: ${coreLabel(g)}`],
+    ...((S.sysById[g.system] || {}).standalone ? [] : [["core", `Core: ${coreLabel(g)}`]]),
     ...(g.core && g.core !== (S.config.system_cores || {})[g.system] ? [["core-all", `Use this core for every ${(S.sysById[g.system] || {}).name || ""} game`]] : []),
     ...(popSurprise ? [["again", "↻  Surprise me again"]] : []),
     ...(S.native ? [["art", "Set box art…"]] : []),
@@ -486,6 +487,11 @@ function renderSettings(focusDo) {
   $("#ra-status").innerHTML = ra.found
     ? `<div class="ok">● Found RetroArch</div><div class="path">${esc(ra.exe)}</div><div class="path">${ra.cores} core${ra.cores === 1 ? "" : "s"} installed${ra.playlists ? ` · playlists in ${esc(ra.playlists)}` : ""}</div>`
     : `<div class="bad">● RetroArch not found</div><div class="path">Install it from retroarch.com, or choose its folder below.</div>`;
+  const emus = [...(S.emulators || [])].sort((a, b) => (b.has_games - a.has_games));
+  $("#emulators").innerHTML = emus.map((e) => `<button class="btn folder emu" data-nav data-do="pick-emu" data-sid="${e.id}">
+      <span class="emu-name">${esc(e.system)} · ${esc(e.name)}</span>
+      <em class="${e.exe ? "ok" : ""}">${e.exe ? "Found" : e.has_games ? "Not found · choose…" : "Choose…"}</em>
+    </button>${e.exe ? `<div class="emu-path">${esc(e.exe)}</div>` : ""}`).join("");
   const folders = S.config.rom_folders || [];
   $("#rom-folders").innerHTML = folders.length
     ? folders.map((f, i) => `<button class="btn folder" data-nav data-do="rm-folder" data-i="${i}"><span>${esc(f)}</span><em>Remove</em></button>`).join("")
@@ -590,6 +596,16 @@ async function doAction(el) {
       return renderSettings(`[data-id="${el.dataset.id}"]`);
     }
     if (d === "remap") return remap(el.dataset.act);
+    if (d === "pick-emu") {
+      const api = R.native();
+      const p = api ? await api.pick_file("exe") : (window.prompt("Path to the emulator's .exe:") || "").trim();
+      if (!p) return;
+      await R.setConfig({ emulators: { ...(S.config.emulators || {}), [el.dataset.sid]: p } });
+      await loadState();
+      renderSettings(`[data-sid="${el.dataset.sid}"]`);
+      const e = (S.emulators || []).find((x) => x.id === el.dataset.sid);
+      return R.toast(e && e.exe ? `Using ${e.name} for ${e.system}` : "That doesn't look like the right program", !(e && e.exe));
+    }
     if (d === "pad-preset") {
       const N = R.nav, p = el.dataset.p;
       if (p === "reset") { await saveMaps({}, {}, '[data-p="reset"]'); return R.toast("Buttons and keys are back to normal"); }

@@ -93,7 +93,7 @@ class Player:
 
     def run(self, game: dict, start) -> None:
         if self._proc and self._proc.poll() is None:
-            raise RuntimeError(f"{self.current['title']} is still running. Close RetroArch first.")
+            raise RuntimeError(f"{self.current['title']} is still running. Close it first.")
         proc = start()
         self._proc = proc
         self.current = {"id": game["id"], "title": game["title"], "since": time.time()}
