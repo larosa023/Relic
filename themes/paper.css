@@ -1,0 +1,20 @@
+/*
+  @name   Paper
+  @swatch #f3efe6 #ffffff #c0702a
+*/
+:root {
+  --bg:#f1ece2;
+  --surface:#fbf8f2;
+  --surface-2:#e9e2d4;
+  --border:#d6ccb8;
+  --text:#1f1b15;
+  --dim:#6e6555;
+  --accent:#c0702a;
+  --accent-text:#fffaf3;
+  --glow:rgba(192,112,42,.35);
+}
+/* light theme: soften the backdrop and keep text dark */
+.bd-img { filter: blur(7px) saturate(1.1) brightness(1.1); }
+.bd-img.on { opacity: .35; }
+.sys-maker { color: var(--dim); }
+#now-playing { color: #8a4c14; }

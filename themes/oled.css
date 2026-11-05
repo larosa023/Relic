@@ -1,0 +1,17 @@
+/*
+  @name   OLED Black
+  @swatch #000000 #0d0d0d #ffffff
+*/
+:root {
+  --bg:#000;
+  --surface:#0c0c0c;
+  --surface-2:#161616;
+  --border:#232323;
+  --text:#fff;
+  --dim:#8a8a8a;
+  --accent:#ffffff;
+  --accent-text:#000;
+  --glow:rgba(255,255,255,.28);
+}
+/* pure black for OLED TVs: no backdrop, nothing glowing at rest */
+.bd-img.on { opacity: .35; }

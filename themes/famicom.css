@@ -1,0 +1,15 @@
+/*
+  @name   Famicom
+  @swatch #1a0d0d #f4e7d3 #e03c31
+*/
+:root {
+  --bg:#150b0a;
+  --surface:#241312;
+  --surface-2:#311b19;
+  --border:#432622;
+  --text:#f4e7d3;
+  --dim:#b79c88;
+  --accent:#e03c31;
+  --accent-text:#fff4e8;
+  --glow:rgba(224,60,49,.45);
+}

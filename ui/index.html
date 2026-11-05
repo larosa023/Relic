@@ -20,6 +20,7 @@
   <div class="win" id="win-ctl" hidden>
     <button data-win="min" title="Minimize">&#x2013;</button>
     <button data-win="full" title="Full screen (F11)">&#x26F6;</button>
+    <button data-win="max" title="Maximize">&#x25A1;</button>
     <button data-win="close" title="Close">&#x2715;</button>
   </div>
 </header>
@@ -61,6 +62,10 @@
         <div id="rom-folders"></div>
         <button class="btn" data-nav data-do="add-folder">Add a folder…</button>
         <button class="btn" data-nav data-do="rescan">Rescan everything</button>
+        <h2>Controller</h2>
+        <p class="hint">Choose an action, then press the controller button or key you want for it. The D-pad, stick and arrow keys always move.</p>
+        <div class="themes" id="control-presets"></div>
+        <div id="controls"></div>
       </div>
       <div class="set-group">
         <h2>Couch</h2>
@@ -93,6 +98,11 @@
 
 <footer id="hints"></footer>
 <div id="toast" hidden></div>
+<!-- window edges: click and drag to resize -->
+<div class="rz rz-n" data-edge="n"></div><div class="rz rz-s" data-edge="s"></div>
+<div class="rz rz-e" data-edge="e"></div><div class="rz rz-w" data-edge="w"></div>
+<div class="rz rz-ne" data-edge="ne"></div><div class="rz rz-nw" data-edge="nw"></div>
+<div class="rz rz-se" data-edge="se"></div><div class="rz rz-sw" data-edge="sw"></div>
 <div id="letter"></div>
 <div id="launching" hidden><div class="spin"></div><div id="launching-text"></div></div>
 

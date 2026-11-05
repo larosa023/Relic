@@ -1,0 +1,18 @@
+/*
+  @name   Dot Matrix
+  @swatch #0f380f #306230 #9bbc0f
+*/
+:root {
+  --bg:#0d2a0d;
+  --surface:#163a16;
+  --surface-2:#1e4a1e;
+  --border:#2b5e2b;
+  --text:#e3f5b8;
+  --dim:#8fb36a;
+  --accent:#9bbc0f;
+  --accent-text:#0f380f;
+  --glow:rgba(155,188,15,.45);
+}
+/* the original handheld's four greens, with a faint pixel grid */
+body::after { content: ""; position: fixed; inset: 0; z-index: 50; pointer-events: none;
+  background: repeating-linear-gradient(90deg, rgba(0,0,0,.08) 0 1px, transparent 1px 3px), repeating-linear-gradient(0deg, rgba(0,0,0,.08) 0 1px, transparent 1px 3px); }

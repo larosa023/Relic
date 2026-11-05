@@ -1,0 +1,15 @@
+/*
+  @name   Swirl
+  @swatch #0c0c10 #18181f #f06a1d
+*/
+:root {
+  --bg:#0b0b0f;
+  --surface:#17171e;
+  --surface-2:#202029;
+  --border:#2d2d39;
+  --text:#f2f2f7;
+  --dim:#9a9aab;
+  --accent:#f06a1d;
+  --accent-text:#1c0a02;
+  --glow:rgba(240,106,29,.45);
+}

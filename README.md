@@ -17,7 +17,9 @@ Relic reads what RetroArch already knows (its playlists, cores and thumbnails) a
 - **While you play**: Relic minimizes, records the session, and comes back when RetroArch closes. Play time and last played show on each game.
 - **Updates built in**: Relic checks GitHub when it starts and shows **Update ready** on the Settings tile. In Settings → Updates, one button downloads, verifies and installs the new version, then restarts Relic. The single-file `Relic.exe` installs itself to `%LOCALAPPDATA%\Programs\Relic` (with Start menu and Desktop shortcuts) the first time you update. A copy run from source updates with `git pull`.
 - **One copy at a time**: opening Relic again brings the open window to the front. **Settings → Quit Relic** closes it from the controller.
-- **Themes**: Relic, Arcade, Phosphor (with scanlines) and Console Gray. You can drop your own `.css` themes into `%APPDATA%\Relic\themes`.
+- **Your buttons**: Settings → Controller remaps every action to any controller button or key (pick the action, press the button). There's a one-press Nintendo layout that swaps A/B and X/Y. Hints on screen always show your layout.
+- **Window**: in a window, drag any edge or corner to resize (Windows snapping works). Drag the top bar to move it, or double-click the bar to maximize.
+- **Themes**: Relic, Arcade, Phosphor (with scanlines), Console Gray, Dot Matrix, Famicom, Vaporwave, Midnight, Sakura, Swirl, OLED Black and Paper (light). You can drop your own `.css` themes into `%APPDATA%\Relic\themes`.
 
 ## Run it
 

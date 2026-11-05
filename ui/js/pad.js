@@ -1,7 +1,7 @@
 /* Input and focus: controller, keyboard and mouse all become the same buttons.
 
-   Buttons: up down left right a b x y lb rb start select
-   Gamepad (standard mapping): D-pad or left stick moves (hold to repeat, faster the longer you hold),
+   Buttons: up down left right a b x y lb rb lt rt start select (all but the directions can be remapped
+   in Settings → Controller). Gamepad (standard mapping), by default: D-pad or left stick moves (hold to repeat, faster the longer you hold),
    A select · B back · X favorite · Y options · LB/RB previous/next system · LT/RT jump by letter
    Start settings · Select sort (on a shelf) or surprise me (at home)
    Keyboard: arrows, Enter, Esc/Backspace, F (X), Tab or I (Y), Q/E (LB/RB), PageUp/PageDown (LT/RT),
@@ -11,10 +11,46 @@
 "use strict";
 const { $$ } = R;
 const N = (R.nav = { cur: null, handlers: [], usingPad: false });
-const BTN = { 0: "a", 1: "b", 2: "x", 3: "y", 4: "lb", 5: "rb", 6: "lt", 7: "rt", 8: "select", 9: "start", 12: "up", 13: "down", 14: "left", 15: "right" };
-const KEY = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right", Enter: "a", " ": "a",
-  Escape: "b", Backspace: "b", f: "x", F: "x", Tab: "y", i: "y", I: "y", q: "lb", Q: "lb", e: "rb", E: "rb",
-  s: "select", S: "select", ",": "start", PageUp: "lt", PageDown: "rt" };
+// The actions you can remap, and where they start out (standard gamepad button numbers, keyboard keys).
+N.ACTIONS = ["a", "b", "x", "y", "lb", "rb", "lt", "rt", "select", "start"];
+N.DEFAULT_PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, select: 8, start: 9 };
+N.NINTENDO_PAD = { a: 1, b: 0, x: 3, y: 2, lb: 4, rb: 5, lt: 6, rt: 7, select: 8, start: 9 };
+N.DEFAULT_KEYS = { a: ["Enter", " "], b: ["Escape", "Backspace"], x: ["f"], y: ["Tab", "i"], lb: ["q"], rb: ["e"],
+  lt: ["PageUp"], rt: ["PageDown"], select: ["s"], start: [","] };
+// What each physical button is called on an Xbox-style pad.
+N.PAD_NAMES = { 0: "A", 1: "B", 2: "X", 3: "Y", 4: "LB", 5: "RB", 6: "LT", 7: "RT", 8: "View", 9: "Menu",
+  10: "LS", 11: "RS", 16: "Guide", 17: "Share" };
+const DPAD = { 12: "up", 13: "down", 14: "left", 15: "right" };
+const ARROWS = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
+let BTN = {}, KEY = {};
+N.pad = {}; N.keys = {};
+const norm = (k) => (k.length === 1 ? k.toLowerCase() : k);
+
+/** Load your button and key layout from settings (missing actions keep their defaults). */
+N.applyMaps = (cfg = {}) => {
+  N.pad = { ...N.DEFAULT_PAD, ...(cfg.pad_map || {}) };
+  N.keys = { ...N.DEFAULT_KEYS, ...(cfg.key_map || {}) };
+  BTN = { ...DPAD };
+  for (const [act, i] of Object.entries(N.pad)) if (N.ACTIONS.includes(act) && !(i in DPAD)) BTN[i] = act;
+  KEY = { ...ARROWS };
+  for (const [act, list] of Object.entries(N.keys)) for (const k of list || []) if (N.ACTIONS.includes(act)) KEY[norm(k)] = act;
+};
+N.applyMaps();
+N.padName = (act) => { const i = N.pad[act]; return i == null ? "–" : (N.PAD_NAMES[i] || `Button ${i}`); };
+N.keyName = (act) => {
+  const k = (N.keys[act] || [])[0];
+  return k == null ? "–" : ({ " ": "Space", Escape: "Esc", PageUp: "PgUp", PageDown: "PgDn", Backspace: "Bksp" }[k] || (k.length === 1 ? k.toUpperCase() : k));
+};
+
+/** Wait for the next controller button or key (for remapping). cb gets {pad: n} or {key: "x"}, or null on timeout. */
+N.capture = (cb, ms = 6000) => {
+  N.capturing && N.capturing.cb(null);
+  const c = { cb: (r) => { clearTimeout(c.timer); if (N.capturing === c) N.capturing = null; cb(r); } };
+  c.timer = setTimeout(() => c.cb(null), ms);
+  N.capturing = c;
+  P.prev = new Set(held());   // a button already held doesn't count
+  P.rawPrev = rawHeld();
+};
 const DIRS = new Set(["up", "down", "left", "right"]);
 
 /** Handlers get (button) and return true if they used it. Newest first. */
@@ -53,7 +89,6 @@ N.focus = (el, { scroll = true, quiet = false } = {}) => {
   if (!quiet) document.dispatchEvent(new CustomEvent("relic:focus", { detail: el }));
 };
 
-/** The nearest item in a direction, preferring ones lined up with the current one. */
 /** Candidates for a move. In a big grid or rail only the neighbours nearby are measured, so moving
     stays instant with thousands of games. */
 function nearby() {
@@ -67,6 +102,7 @@ function nearby() {
   return near.concat(rest);
 }
 
+/** The nearest item in a direction, preferring ones lined up with the current one. */
 N.move = (dir) => {
   const items = N.cur && document.body.contains(N.cur) ? nearby() : N.items();
   if (!items.length) return;
@@ -99,7 +135,12 @@ document.addEventListener("keydown", (e) => {
   const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA");
   if (typing && e.key !== "Escape") return;
   if (e.key === "F11") { e.preventDefault(); R.app && R.app.toggleFullscreen(); return; }
-  const btn = KEY[e.key];
+  if (N.capturing) {
+    if (["Shift", "Control", "Alt", "Meta"].includes(e.key) || e.key in ARROWS) return;
+    e.preventDefault();
+    return N.capturing.cb({ key: norm(e.key) });
+  }
+  const btn = KEY[norm(e.key)];
   if (!btn || e.ctrlKey || e.altKey || e.metaKey) return;
   e.preventDefault();
   N.usingPad = false;
@@ -113,7 +154,7 @@ document.addEventListener("mousemove", (e) => {
 }, { passive: true });
 
 // ---------- gamepad ----------
-const P = { prev: new Set(), hold: { btn: "", next: 0, n: 0 }, fg: true, fgAt: 0 };
+const P = { prev: new Set(), rawPrev: new Set(), hold: { btn: "", next: 0, n: 0 }, fg: true, fgAt: 0 };
 function pads() {
   const all = navigator.getGamepads ? [...navigator.getGamepads()].filter((p) => p && p.connected !== false) : [];
   const std = all.filter((p) => p.mapping === "standard");
@@ -129,6 +170,11 @@ function held() {
   }
   return out;
 }
+function rawHeld() {
+  const out = new Set();
+  for (const p of pads()) p.buttons.forEach((b, i) => { if (b.pressed || b.value > 0.5) out.add(i); });
+  return out;
+}
 async function inFront(now) {
   if (now - P.fgAt < 400) return P.fg;
   P.fgAt = now;
@@ -139,6 +185,12 @@ async function inFront(now) {
 }
 async function poll(now) {
   requestAnimationFrame(poll);
+  if (N.capturing) {
+    const raw = rawHeld();
+    for (const i of raw) if (!P.rawPrev.has(i) && !(i in DPAD)) { P.rawPrev = raw; P.prev = held(); return N.capturing.cb({ pad: i }); }
+    P.rawPrev = raw;
+    return;
+  }
   if (R.S.config.controller_nav === false) return;
   const h = held();
   if (!h.size && !P.prev.size) return;

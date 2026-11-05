@@ -16,6 +16,8 @@ async function loadState() {
   S.config = st.config; S.themes = st.themes; S.ra = st.retroarch; S.native = st.native; S.version = st.version;
   setPlaying(st.playing);
   applyTheme(S.config.theme);
+  R.nav.applyMaps(S.config);
+  document.body.classList.toggle("framed", S.config.frameless === false);
   if (st.update) setUpdate(st.update);
 }
 async function loadLibrary(refresh = false) {
@@ -222,11 +224,12 @@ function showInfo(el) {
 }
 
 // ---------- hints ----------
-const GLYPH = { a: "A", b: "B", x: "X", y: "Y", lb: "LB", rb: "RB", lt: "LT", rt: "RT", start: "☰", select: "⧉" };
-const KEYCAP = { a: "Enter", b: "Esc", x: "F", y: "Tab", lb: "Q", rb: "E", lt: "PgUp", rt: "PgDn", start: ",", select: "S" };
 function hints() {
   const pad = R.nav.usingPad || document.body.classList.contains("has-pad");
-  const cap = (bs) => bs.split("+").map((b) => pad ? `<b class="g g-${b}">${GLYPH[b]}</b>` : `<b class="k">${KEYCAP[b]}</b>`).join("");
+  // Hints show your own layout: the button or key each action is on right now.
+  const cap = (bs) => bs.split("+").map((b) => pad
+    ? `<b class="g g-${R.nav.pad[b]}">${esc(R.nav.padName(b))}</b>`
+    : `<b class="k">${esc(R.nav.keyName(b))}</b>`).join("");
   const cur = R.nav.cur;
   const onGame = cur && cur.dataset.game && !$("#game-pop:not([hidden])");
   let list = [];
@@ -403,6 +406,59 @@ function renderUpdate() {
   if (focused && $("[data-do]", acts)) R.nav.focus($("[data-do]", acts), { scroll: false });
 }
 
+// ---------- controller layout ----------
+const ACTION_LABEL = { a: "Select / Play", b: "Back", x: "Favorite", y: "Game options", lb: "Previous system",
+  rb: "Next system", lt: "Back a letter", rt: "Ahead a letter", select: "Sort / Surprise me", start: "Settings" };
+let capturingAct = null;
+function renderControls() {
+  const N = R.nav;
+  $("#controls").innerHTML = N.ACTIONS.map((act) => {
+    const wait = capturingAct === act;
+    return `<button class="btn bind${wait ? " waiting" : ""}" data-nav data-do="remap" data-act="${act}">
+      <span>${esc(ACTION_LABEL[act])}</span>
+      ${wait ? `<em>Press a button or key…</em>`
+        : `<b class="g g-${N.pad[act]}">${esc(N.padName(act))}</b><b class="k">${esc(N.keyName(act))}</b>`}
+    </button>`;
+  }).join("");
+  const nintendo = N.ACTIONS.every((a) => N.pad[a] === N.NINTENDO_PAD[a]);
+  const xbox = N.ACTIONS.every((a) => N.pad[a] === N.DEFAULT_PAD[a]);
+  $("#control-presets").innerHTML = `
+    <button class="btn theme${xbox ? " on" : ""}" data-nav data-do="pad-preset" data-p="xbox">Xbox layout</button>
+    <button class="btn theme${nintendo ? " on" : ""}" data-nav data-do="pad-preset" data-p="nintendo">Nintendo layout</button>
+    <button class="btn theme" data-nav data-do="pad-preset" data-p="reset">Reset everything</button>`;
+}
+async function saveMaps(pad, keys, focusSel) {
+  await R.setConfig({ pad_map: pad, key_map: keys });
+  R.nav.applyMaps(S.config);
+  renderControls();
+  hints();
+  if (focusSel) R.nav.focus($(focusSel, $("#settings")), { scroll: false });
+}
+function remap(act) {
+  const N = R.nav;
+  capturingAct = act;
+  renderControls();
+  R.nav.focus($(`[data-act="${act}"]`), { scroll: false });
+  N.capture(async (r) => {
+    capturingAct = null;
+    const pad = { ...N.pad }, keys = Object.fromEntries(Object.entries(N.keys).map(([k, v]) => [k, [...v]]));
+    if (!r) { renderControls(); R.nav.focus($(`[data-act="${act}"]`), { scroll: false }); return R.toast("Nothing pressed, so nothing changed"); }
+    if ("pad" in r) {
+      // The action that had this button takes this action's old one: every action keeps a button.
+      const other = N.ACTIONS.find((a) => a !== act && pad[a] === r.pad);
+      if (other) pad[other] = pad[act];
+      pad[act] = r.pad;
+      R.toast(`${ACTION_LABEL[act]} is now ${N.PAD_NAMES[r.pad] || `button ${r.pad}`}${other ? ` · ${ACTION_LABEL[other]} moved to ${N.PAD_NAMES[pad[other]] || `button ${pad[other]}`}` : ""}`);
+    } else {
+      for (const a of N.ACTIONS) if (a !== act) keys[a] = (keys[a] || []).filter((k) => k !== r.key);
+      keys[act] = [r.key];
+      R.toast(`${ACTION_LABEL[act]} is now the ${r.key === " " ? "Space" : r.key.length === 1 ? r.key.toUpperCase() : r.key} key`);
+    }
+    R.sound("select");
+    await saveMaps(pad, keys, `[data-act="${act}"]`);
+  });
+}
+
 // ---------- settings ----------
 const TOGGLES = [
   ["start_fullscreen", "Open Relic full screen"],
@@ -430,6 +486,7 @@ function renderSettings(focusDo) {
   $("#themes").innerHTML = S.themes.map((t) =>
     `<button class="btn theme${t.id === S.config.theme ? " on" : ""}" data-nav data-do="theme" data-id="${t.id}">
       <span class="sw">${(t.swatch || []).map((c) => `<i style="background:${esc(c)}"></i>`).join("")}</span>${esc(t.name)}</button>`).join("");
+  renderControls();
   $("#ver").textContent = S.version;
   const hidden = S.games.filter((g) => g.hidden).length;
   $("#set-extra").innerHTML = (hidden ? `<button class="btn" data-nav data-do="unhide">Show ${hidden} hidden game${hidden === 1 ? "" : "s"} again</button>` : "")
@@ -521,6 +578,13 @@ async function doAction(el) {
       applyTheme(el.dataset.id);
       return renderSettings(`[data-id="${el.dataset.id}"]`);
     }
+    if (d === "remap") return remap(el.dataset.act);
+    if (d === "pad-preset") {
+      const N = R.nav, p = el.dataset.p;
+      if (p === "reset") { await saveMaps({}, {}, '[data-p="reset"]'); return R.toast("Buttons and keys are back to normal"); }
+      await saveMaps(p === "nintendo" ? { ...N.NINTENDO_PAD } : { ...N.DEFAULT_PAD }, { ...N.keys }, `[data-p="${p}"]`);
+      return R.toast(p === "nintendo" ? "Nintendo layout: A and B, X and Y swapped" : "Xbox layout");
+    }
     if (d === "unhide") {
       for (const g of S.games.filter((x) => x.hidden)) await setMeta(g, { hidden: false });
       R.toast("Hidden games are back");
@@ -573,7 +637,7 @@ async function doAction(el) {
 R.nav.on((btn) => {
   const cur = R.nav.cur;
   const g = cur && cur.dataset.game && S.byId[cur.dataset.game];
-  if (!$("#launching").hidden) return true;
+  if (!$("#launching").hidden || R.nav.capturing) return true;
   if (!$("#game-pop").hidden) {
     if (btn === "b" || btn === "y") { R.sound("back"); closePop(); return true; }
     return false;  // directions and A work inside the popup
@@ -637,6 +701,7 @@ A.toggleFullscreen = async () => {
     const on = !(await api.is_fullscreen());
     await api.fullscreen(on);
     document.body.classList.toggle("fullscreen", on);
+    if (!on) api.state().then(winState).catch(() => {});
   } else if (document.fullscreenElement) document.exitFullscreen();
   else document.documentElement.requestFullscreen().catch(() => {});
 };
@@ -645,12 +710,27 @@ function winCtl(what) {
   if (!api) return;
   if (what === "min") api.minimize();
   else if (what === "full") A.toggleFullscreen();
+  else if (what === "max") api.toggle_maximize().then(winState);
   else if (what === "close") api.close();
 }
-$("#top").addEventListener("mousedown", (e) => {
+function winState(state) {
+  document.body.classList.toggle("win-max", !!state && state !== "normal");
+  const b = $('[data-win="max"]');
+  if (b) { b.title = state === "normal" ? "Maximize" : "Restore"; b.innerHTML = state === "normal" ? "&#x25A1;" : "&#x2750;"; }
+}
+A.winState = winState;
+$("#top").addEventListener("mousedown", async (e) => {
   const api = R.native();
   if (!api || e.button !== 0 || e.target.closest("button, #now-playing") || document.body.classList.contains("fullscreen")) return;
-  api.drag();
+  if (e.detail === 2) return winState(await api.toggle_maximize());   // double-click the bar
+  winState(await api.drag());
+});
+// Window edges and corners: click and drag to resize (Windows' own resize, so snapping works too).
+for (const el of $$(".rz")) el.addEventListener("mousedown", async (e) => {
+  const api = R.native();
+  if (!api || e.button !== 0) return;
+  e.preventDefault();
+  try { winState(await api.resize(el.dataset.edge)); } catch (err) {}
 });
 
 function tick() {
@@ -689,10 +769,7 @@ async function start() {
   } catch (e) {
     R.toast(`Couldn't load your library: ${e.message}`, true);
   }
-  if (S.native) {
-    $("#win-ctl").hidden = false;
-    if (S.config.start_fullscreen) document.body.classList.add("fullscreen");
-  }
+  if (S.native) nativeReady();
   renderHome();
   watchLibrary();
   // Relic checks GitHub in the background as it starts; pick up the answer.
@@ -703,6 +780,16 @@ async function start() {
     } catch (e) {}
   }, 5000);
 }
-window.addEventListener("pywebviewready", () => { S.native = true; $("#win-ctl").hidden = false; });
+function nativeReady() {
+  if (document.body.classList.contains("native")) return;
+  S.native = true;
+  document.body.classList.add("native");
+  $("#win-ctl").hidden = false;
+  const api = R.native();
+  if (!api) return;
+  api.is_fullscreen().then((on) => document.body.classList.toggle("fullscreen", !!on)).catch(() => {});
+  api.state().then(winState).catch(() => {});
+}
+window.addEventListener("pywebviewready", nativeReady);
 start();
 })();

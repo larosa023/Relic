@@ -1,0 +1,15 @@
+/*
+  @name   Sakura
+  @swatch #160d12 #2a1620 #ff8fb8
+*/
+:root {
+  --bg:#150c11;
+  --surface:#25151d;
+  --surface-2:#311c27;
+  --border:#452936;
+  --text:#fff0f5;
+  --dim:#c49aac;
+  --accent:#ff8fb8;
+  --accent-text:#2a0a17;
+  --glow:rgba(255,143,184,.42);
+}

@@ -1,0 +1,15 @@
+/*
+  @name   Midnight
+  @swatch #070b16 #111a30 #5aa8ff
+*/
+:root {
+  --bg:#070b16;
+  --surface:#101a30;
+  --surface-2:#16233f;
+  --border:#213256;
+  --text:#e7efff;
+  --dim:#8b9cc0;
+  --accent:#5aa8ff;
+  --accent-text:#04101f;
+  --glow:rgba(90,168,255,.45);
+}

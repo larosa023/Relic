@@ -1,0 +1,18 @@
+/*
+  @name   Vaporwave
+  @swatch #140a2a #ff71ce #01cdfe
+*/
+:root {
+  --bg:#100822;
+  --surface:#1d1040;
+  --surface-2:#28165a;
+  --border:#3b2378;
+  --text:#fdeaff;
+  --dim:#b79ad8;
+  --accent:#01cdfe;
+  --accent-text:#0b0420;
+  --glow:rgba(255,113,206,.5);
+}
+/* sunset glow along the bottom */
+#backdrop::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 45%;
+  background: linear-gradient(0deg, rgba(255,113,206,.14), transparent); }

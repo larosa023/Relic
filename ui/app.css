@@ -105,7 +105,7 @@ button { font: inherit; color: inherit; }
 .card.focus .cap { color: var(--text); }
 
 /* Placeholder cover when there's no box art: a little game case. */
-.ph { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; padding: .9em .8em;
+.ph { color: #fff; position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; padding: .9em .8em;
   background:
     linear-gradient(90deg, rgba(255,255,255,.07) 0 6%, transparent 6%),
     linear-gradient(170deg, color-mix(in srgb, var(--sys) 60%, #000) 0%, color-mix(in srgb, var(--sys) 25%, #0b0b0e) 100%); }
@@ -174,6 +174,29 @@ button { font: inherit; color: inherit; }
 .ra-status .notes { margin-top: .7em; color: var(--dim); font-size: .85em; white-space: pre-wrap; max-height: 9em; overflow: hidden; }
 .badge { display: inline-block; padding: .15em .6em; border-radius: 99px; background: var(--accent); color: var(--accent-text); font-weight: 700; font-size: .9em; }
 
+.btn.bind { width: 100%; gap: .5em; }
+.btn.bind span { flex: 1; }
+.btn.bind b { display: inline-grid; place-items: center; min-width: 2.2em; height: 1.75em; padding: 0 .45em; border-radius: 99px;
+  font-size: .78em; font-weight: 800; color: #fff; background: #3a3f4b; }
+.btn.bind b.k { border-radius: 5px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); font-weight: 600; min-width: 3.2em; }
+.btn.bind em { font-style: normal; font-size: .85em; }
+.btn.bind.waiting { border-color: var(--accent); animation: pulse 1s infinite; }
+#control-presets { margin-bottom: .8em; }
+
+/* ---------- window edges (frameless window, not maximized or full screen) ---------- */
+.rz { position: fixed; z-index: 60; display: none; }
+body.native:not(.win-max):not(.fullscreen):not(.framed) .rz { display: block; }
+body.framed #win-ctl { display: none !important; }
+.rz-n, .rz-s { left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
+.rz-n { top: 0; } .rz-s { bottom: 0; }
+.rz-e, .rz-w { top: 10px; bottom: 10px; width: 6px; cursor: ew-resize; }
+.rz-e { right: 0; } .rz-w { left: 0; }
+.rz-ne, .rz-nw, .rz-se, .rz-sw { width: 12px; height: 12px; }
+.rz-ne { top: 0; right: 0; cursor: nesw-resize; } .rz-sw { bottom: 0; left: 0; cursor: nesw-resize; }
+.rz-nw { top: 0; left: 0; cursor: nwse-resize; } .rz-se { bottom: 0; right: 0; cursor: nwse-resize; }
+/* a hairline so the window's edge is visible against whatever's behind it */
+body.native:not(.win-max):not(.fullscreen):not(.framed) { box-shadow: inset 0 0 0 1px var(--border); }
+
 /* ---------- game options ---------- */
 .overlay { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: rgba(0,0,0,.72);
   animation: fade .18s ease; }
@@ -197,7 +220,8 @@ button { font: inherit; color: inherit; }
 .hint-i b { display: inline-grid; place-items: center; min-width: 1.75em; height: 1.75em; padding: 0 .35em; border-radius: 99px; font-size: .8em;
   font-weight: 800; color: #fff; background: #3a3f4b; }
 .hint-i b.k { border-radius: 5px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); font-weight: 600; }
-.g-a { background: #2f9e4f !important; } .g-b { background: #c8433a !important; } .g-x { background: #2f6fd1 !important; } .g-y { background: #d1a21f !important; color: #1b1408 !important; }
+/* face buttons keep their colours wherever you put them (by physical button: 0 A, 1 B, 2 X, 3 Y) */
+.g-0 { background: #2f9e4f !important; } .g-1 { background: #c8433a !important; } .g-2 { background: #2f6fd1 !important; } .g-3 { background: #d1a21f !important; color: #1b1408 !important; }
 
 /* the big letter when jumping with LT/RT */
 #letter { position: fixed; left: 50%; top: 50%; z-index: 15; transform: translate(-50%, -50%) scale(.9); pointer-events: none;
