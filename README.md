@@ -24,6 +24,7 @@ Relic reads what RetroArch already knows (its playlists, cores and thumbnails) a
 - **Like a console**: **Select + Start** quits any game back to Relic (RetroArch and the standalone emulators). RetroArch saves when you quit, so games offer **Resume** or **Start over**. Controller profiles are installed for you, so Xbox, PlayStation, 8BitDo and Switch Pro pads just work.
 - **Game details and search**: year, genre, players and developer from libretro's game database. Filter a shelf by players or genre, and search everything with the on-screen keyboard (or press `/`).
 - **Collections**: make your own shelves (Y → Add to a collection); they show on the home screen.
+- **Physical covers** (Settings → Covers): each game shows as you'd have held it, with box art as the insert or label: disc cases for PS2, GameCube, Wii, Xbox and Switch, CD cases for PlayStation, Saturn and Dreamcast, cartridges for NES, SNES, N64, Genesis and Game Boy, and a card for TurboGrafx-16. The shapes are generic, with no console logos.
 - **CRT look**: off, retro consoles only, or everything (Settings → CRT look).
 - **RetroAchievements**: sign in once in Settings (Relic keeps a token, not your password), with an optional hardcore mode.
 - **BIOS import**: point Relic at the folder with your BIOS dumps; it recognises them and puts each where its emulator looks, now and after every new install.

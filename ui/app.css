@@ -108,6 +108,56 @@ button { font: inherit; color: inherit; }
 .card.focus .cover { box-shadow: 0 0 0 3px var(--bg), 0 0 0 calc(3px + .18em) var(--accent), 0 0 calc(var(--u) * 2.2) var(--glow), 0 calc(var(--u) * 1) calc(var(--u) * 2.6) rgba(0,0,0,.7); }
 .card.focus .cap { color: var(--text); }
 
+/* ---------- Physical look: cases and cartridges (generic shapes, plain plastic) ---------- */
+.card.phys .shell { height: var(--card-h); position: relative; background: var(--case); transition: box-shadow .18s;
+  box-shadow: 0 calc(var(--u) * .35) calc(var(--u) * 1.1) rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.18), inset 0 -2px 3px rgba(0,0,0,.35); }
+.card.phys .cover { position: absolute; box-shadow: none; border-radius: 3px; height: auto; }
+.card.phys .shell::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;   /* light on plastic */
+  background: linear-gradient(115deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,.04) 28%, transparent 45%, transparent 70%, rgba(255,255,255,.06) 100%); }
+.card.phys.focus .cover { box-shadow: none; }
+.card.phys.focus .shell { box-shadow: 0 0 0 3px var(--bg), 0 0 0 calc(3px + .18em) var(--accent), 0 0 calc(var(--u) * 2.2) var(--glow), 0 calc(var(--u) * 1) calc(var(--u) * 2.6) rgba(0,0,0,.7); }
+.card.phys .ph { padding: .6em .55em; font-size: .85em; }
+
+/* disc keep case: a ridged spine on the left, the insert under clear plastic */
+.k-case .shell { border-radius: calc(var(--radius) * .7); }
+.k-case .cover { inset: 3.5% 3% 3.5% 9%; border-radius: 2px; }
+.k-case .shell::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 9%; border-radius: inherit;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 2px, transparent 2px 6px), linear-gradient(90deg, rgba(0,0,0,.25), rgba(255,255,255,.08)); }
+
+/* CD jewel case: clear plastic and a hinge */
+.k-jewel .shell { --case: rgba(210,220,232,.16); border-radius: 3px; border: 1px solid rgba(255,255,255,.32); backdrop-filter: none; }
+.k-jewel .cover { inset: 4% 4% 4% 11%; border-radius: 1px; }
+.k-jewel .shell::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 9%;
+  background: repeating-linear-gradient(0deg, rgba(255,255,255,.22) 0 1px, rgba(0,0,0,.25) 1px 4px); border-right: 1px solid rgba(255,255,255,.3); }
+
+/* tall cartridge: label up top, grip ridges at the bottom */
+.k-cart .shell { border-radius: 5px 5px 3px 3px; }
+.k-cart .cover { inset: 9% 10% 27% 10%; }
+.k-cart .shell::before { content: ""; position: absolute; left: 10%; right: 10%; bottom: 5%; height: 15%;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.35) 0 2px, rgba(255,255,255,.07) 2px 5px); border-radius: 2px; }
+
+/* wide cartridge: rounded top corners, label across the front, notches on the sides */
+.k-wide .shell { border-radius: 14% 14% 4px 4px / 18% 18% 4px 4px; }
+.k-wide .cover { inset: 12% 11% 20% 11%; }
+.k-wide .shell::before { content: ""; position: absolute; left: 0; right: 0; top: 40%; height: 18%;
+  background: linear-gradient(90deg, rgba(0,0,0,.4) 0 4%, transparent 4% 96%, rgba(0,0,0,.4) 96%); }
+
+/* handheld cartridge: one cut corner, ridges up top, label below */
+.k-hand .shell { border-radius: 4px; clip-path: polygon(0 0, 86% 0, 100% 9%, 100% 100%, 0 100%); }
+.k-hand .cover { inset: 24% 11% 8% 11%; }
+.k-hand .shell::before { content: ""; position: absolute; left: 14%; right: 18%; top: 6%; height: 11%;
+  background: repeating-linear-gradient(90deg, rgba(0,0,0,.32) 0 2px, rgba(255,255,255,.06) 2px 6px); border-radius: 2px; }
+
+/* short wide handheld cartridge */
+.k-slim .shell { border-radius: 6px 6px 3px 3px; }
+.k-slim .cover { inset: 8% 7% 22% 7%; }
+.k-slim .shell::before { content: ""; position: absolute; left: 7%; right: 7%; bottom: 6%; height: 9%;
+  background: repeating-linear-gradient(90deg, rgba(0,0,0,.3) 0 2px, transparent 2px 7px); }
+
+/* credit-card-sized card */
+.k-card .shell { border-radius: 7%/ 9%; }
+.k-card .cover { inset: 7% 6% 7% 6%; border-radius: 4%; }
+
 /* Placeholder cover when there's no box art: a little game case. */
 .ph { color: #fff; position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; padding: .9em .8em;
   background:

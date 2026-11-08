@@ -43,8 +43,18 @@ function placeholder(g) {
 }
 
 function card(g, key) {
+  const shape = S.config.look === "physical" ? R.shape(g.system) : null;
+  const cover = `<div class="cover">${placeholder(g)}<img loading="lazy" decoding="async" alt="" src="${art(g)}" onload="this.parentNode.classList.add('has-art')" onerror="this.remove()"></div>`;
+  if (shape) {
+    // The game as you'd have held it: its case or cartridge, with the box art as the insert or label.
+    return `<div class="card phys k-${shape.kind}${g.favorite ? " fav" : ""}" data-nav data-game="${g.id}" data-key="${esc(key)}" style="--sys:${R.sysColor(g.system)};--ar:${shape.ar};--case:${shape.color}">
+    <div class="shell">${cover}</div>
+    <div class="cap">${esc(g.title)}</div>
+    <div class="star">★</div>
+  </div>`;
+  }
   return `<div class="card${g.favorite ? " fav" : ""}" data-nav data-game="${g.id}" data-key="${esc(key)}" style="--sys:${R.sysColor(g.system)};--ar:${R.boxRatio(g.system)}">
-    <div class="cover">${placeholder(g)}<img loading="lazy" decoding="async" alt="" src="${art(g)}" onload="this.parentNode.classList.add('has-art')" onerror="this.remove()"></div>
+    ${cover}
     <div class="cap">${esc(g.title)}</div>
     <div class="star">★</div>
   </div>`;
@@ -756,6 +766,9 @@ function renderSettings(focusDo) {
     `<button class="btn theme${t.id === S.config.theme ? " on" : ""}" data-nav data-do="theme" data-id="${t.id}">
       <span class="sw">${(t.swatch || []).map((c) => `<i style="background:${esc(c)}"></i>`).join("")}</span>${esc(t.name)}</button>`).join("");
   renderControls();
+  const look = S.config.look || "box";
+  $("#look-opts").innerHTML = [["box", "Box art"], ["physical", "Physical"]].map(([v, t]) =>
+    `<button class="btn theme${look === v ? " on" : ""}" data-nav data-do="look" data-v="${v}">${t}</button>`).join("");
   const crt = S.config.crt || "off";
   $("#crt-opts").innerHTML = [["off", "Off"], ["retro", "Retro consoles"], ["all", "Everything"]].map(([v, t]) =>
     `<button class="btn theme${crt === v ? " on" : ""}" data-nav data-do="crt" data-v="${v}">${t}</button>`).join("");
@@ -899,6 +912,11 @@ async function doAction(el) {
       const r = await R.api("/api/collections", { action: "delete", cid: el.dataset.cid });
       S.config.collections = r.collections;
       return renderSettings('[data-do="bios-import"]');
+    }
+    if (d === "look") {
+      await R.setConfig({ look: el.dataset.v });
+      R.toast(el.dataset.v === "physical" ? "Games now look like their cases and cartridges" : "Plain box art");
+      return renderSettings(`[data-do="look"][data-v="${el.dataset.v}"]`);
     }
     if (d === "crt") {
       await R.setConfig({ crt: el.dataset.v });

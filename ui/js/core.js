@@ -82,6 +82,30 @@ R.boxRatio = (id) => ({ snes: 1.38, n64: 1.38, gb: 1, gbc: 1, gba: 1, vb: 1, nds
   psp: .58, gamegear: .76, lynx: .9, ngp: .9, wonderswan: .9, "3ds": .9, pokemini: .9, gw: 1, neocd: 1,
   pcecd: 1, "3do": 1, ps3: .86, ps4: .8, wiiu: .72, switch: .62, xbox: .7, xbox360: .7, cdi: 1, saturn: .62, segacd: .62, supervision: .9 }[id] || .72);
 
+/* "Physical" look: how each console's games came. Generic shapes and plain plastic colours, no logos.
+   kind: case (disc keep case), jewel (CD case), cart (tall cartridge), wide (wide cartridge),
+         hand (handheld cartridge), slim (short wide handheld cartridge), card (credit-card-sized). */
+const SHAPES = {
+  ps2: ["case", .7, "#141416"], ps3: ["case", .82, "#1b1b1f"], ps4: ["case", .8, "#1d4fa8"],
+  xbox: ["case", .7, "#2d6b2a"], xbox360: ["case", .7, "#3f8d31"], gamecube: ["case", .72, "#1a1a1e"],
+  wii: ["case", .7, "#e8ebee"], wiiu: ["case", .7, "#2aa6d9"], switch: ["case", .62, "#d8261f"],
+  nds: ["case", .9, "#dfe2e6"], "3ds": ["case", .88, "#dfe2e6"], psp: ["case", .58, "#151518"],
+  psx: ["jewel", 1.1], saturn: ["jewel", 1.1], segacd: ["jewel", 1.1], dreamcast: ["jewel", 1.1], "3do": ["jewel", 1.1],
+  pcecd: ["jewel", 1.1], neocd: ["jewel", 1.1], cdi: ["jewel", 1.1], pcfx: ["jewel", 1.1],
+  nes: ["cart", .86, "#a7a7ab"], fds: ["slim", 1.25, "#c9a43a"], sms: ["cart", .8, "#1c1c1f"], genesis: ["cart", .78, "#1c1c1f"],
+  "32x": ["cart", .78, "#1c1c1f"], sg1000: ["cart", .8, "#1c1c1f"], atari2600: ["cart", .9, "#1d1d1f"],
+  atari5200: ["cart", .9, "#262628"], atari7800: ["cart", .9, "#262628"], jaguar: ["cart", .8, "#1d1d1f"],
+  coleco: ["cart", .9, "#262628"], intv: ["cart", .9, "#2a2a2c"], odyssey2: ["cart", .9, "#2a2a2c"],
+  channelf: ["cart", .9, "#e2d9c3"], vectrex: ["cart", .9, "#2a2a2c"],
+  snes: ["wide", 1.18, "#b9b9bd"], n64: ["wide", 1.05, "#8f9298"],
+  gb: ["hand", .87, "#b3b3b8"], gbc: ["hand", .87, "#3a3a40"], vb: ["hand", .9, "#2a2a2e"],
+  gamegear: ["hand", .82, "#1c1c1f"], ngp: ["hand", .87, "#2c2c30"], wonderswan: ["hand", .87, "#3a3a40"],
+  lynx: ["slim", 1.3, "#2a2a2e"], supervision: ["hand", .87, "#2c2c30"], pokemini: ["hand", .87, "#3a3a40"],
+  gba: ["slim", 1.6, "#45454b"], pce: ["card", 1.3, "#e6e6e8"], sgx: ["card", 1.3, "#e6e6e8"],
+};
+/** {kind, ar, color} for the Physical look, or null (that system keeps plain box art). */
+R.shape = (id) => { const s = SHAPES[id]; return s ? { kind: s[0], ar: s[1], color: s[2] || "#ccc" } : null; };
+
 // ---------- sounds (tiny synthesized blips, no files) ----------
 let ac = null;
 R.sound = (kind) => {
