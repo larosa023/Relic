@@ -20,6 +20,7 @@ from retroarch import RetroArch
 from server import Context, make_server
 from setup_wizard import Setup
 from extras import States
+from backup import Backups
 from metadata import Metadata
 from updater import Updater
 from version import VERSION
@@ -205,6 +206,8 @@ def main() -> None:
 
     def on_stop(game, seconds):
         log.info("played %s for %ds", game["title"], seconds)
+        if cfg["backup_dir"] and seconds > 30:
+            backups.run_async("auto")
         if tucked["on"] and cfg["restore_after_play"]:
             show_window()
         tucked["on"] = False
@@ -224,6 +227,7 @@ def main() -> None:
                 srv.shutdown()
         threading.Thread(target=go, daemon=True).start()
 
+    backups = Backups(ra, cfg, ddir)
     player = Player(sessions, on_start=on_start, on_stop=on_stop)
     # Game details: fetched for the systems you have, after each scan, in the background.
     details = Metadata(ddir, ra, on_change=library.bump)
@@ -238,7 +242,7 @@ def main() -> None:
                   config=cfg, meta=meta, sessions=sessions, player=player,
                   ui_dir=res / "ui", theme_dirs=[res / "themes", ddir / "themes"], data_dir=ddir,
                   window_api=window_api, updater=updater, restart=restart, activate=lambda: show_window(),
-                  setup=Setup(ra, cfg, library), details=details, states=States(ra))
+                  setup=Setup(ra, cfg, library), details=details, states=States(ra), backups=backups)
     srv = make_server(ctx, args.port)
     url = f"http://127.0.0.1:{srv.server_address[1]}/"
 

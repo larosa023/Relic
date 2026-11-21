@@ -28,6 +28,11 @@ Relic reads what RetroArch already knows (its playlists, cores and thumbnails) a
 - **CRT look**: off, retro consoles only, or everything (Settings → CRT look).
 - **RetroAchievements**: sign in once in Settings (Relic keeps a token, not your password), with an optional hardcore mode.
 - **BIOS import**: point Relic at the folder with your BIOS dumps; it recognises them and puts each where its emulator looks, now and after every new install.
+- **Stats**: total time, games, sessions, your streak, this week's play and time by system, plus your most played games (the Stats tile on the home screen).
+- **Save backups**: pick a folder (OneDrive works well) and Relic zips your saves, Resume points, favorites and play history after each session, keeping the newest 10.
+- **Fast-forward and rewind**: hold RT to fast-forward and LT to rewind in retro games whose controls never use the triggers.
+- **GameCube and Wii in standalone Dolphin**: faster than RetroArch's version and opens every format, including RVZ. Relic downloads it from dolphin-emu.org when you first play. It can be switched back to RetroArch in Settings.
+- **Start with Windows**: optional, in Settings.
 - **Themes**: Relic, Arcade, Phosphor (with scanlines), Console Gray, Dot Matrix, Famicom, Vaporwave, Midnight, Sakura, Swirl, OLED Black and Paper (light). You can drop your own `.css` themes into `%APPDATA%\Relic\themes`.
 
 ## Run it
@@ -54,6 +59,7 @@ Options: `--windowed` starts in a window, and `--browser` runs it in your web br
 | `updater.py`, `install.py` | checking GitHub releases, downloading and swapping in updates, shortcuts |
 | `setup_wizard.py`, `standalone.py` | downloading RetroArch, cores and emulators; BIOS checks; launching standalone emulators |
 | `extras.py`, `metadata.py` | per-launch RetroArch settings (quit combo, resume, achievements, CRT), BIOS import, game details |
+| `backup.py` | save backups, play stats, start with Windows |
 | `gamedata.py` | favorites, per-game core, play sessions |
 | `server.py` | the local API the UI talks to (127.0.0.1 only) |
 | `ui/` | the couch UI: `core.js` helpers, `pad.js` controller and keyboard, `app.js` screens |

@@ -40,9 +40,17 @@ def _q(v) -> str:
     return '"' + str(v).replace('"', "") + '"'
 
 
-def write_override(path: Path, cfg, resume: bool) -> Path:
+# Systems whose games never use the triggers (L2/R2), so RT/LT are free for fast-forward and rewind.
+SPEED_KEYS = {"nes", "fds", "snes", "gb", "gbc", "gba", "vb", "sms", "genesis", "segacd", "32x", "sg1000", "gamegear",
+              "pce", "pcecd", "sgx", "atari2600", "atari5200", "atari7800", "atari800", "lynx", "ngp", "wonderswan",
+              "coleco", "intv", "odyssey2", "channelf", "vectrex", "supervision", "pokemini", "gw", "msx"}
+
+
+def write_override(path: Path, cfg, resume: bool, system: str = "") -> Path:
     """Relic's settings for this launch, appended on top of your RetroArch settings."""
     lines = {
+        # Keep these out of your retroarch.cfg: RetroArch otherwise writes everything back when it closes.
+        "config_save_on_exit": "false",
         # Select + Start closes the game (no "press again to quit" prompt) and you're back in Relic.
         "input_quit_gamepad_combo": "4" if cfg["quit_combo"] else "0",
         "quit_press_twice": "false",
@@ -50,6 +58,10 @@ def write_override(path: Path, cfg, resume: bool) -> Path:
         "savestate_auto_load": "true" if (cfg["resume"] and resume) else "false",
         "input_autodetect_enable": "true",
     }
+    if cfg["speed_keys"] and system in SPEED_KEYS:
+        # Hold RT to fast-forward (4x), LT to rewind. Triggers are axes 4 and 5 on XInput and SDL pads.
+        lines.update({"input_hold_fast_forward_axis": "+5", "input_rewind_axis": "+4",
+                      "rewind_enable": "true", "rewind_granularity": "2", "fastforward_ratio": "4.0"})
     ra = cfg["retroachievements"] or {}
     if ra.get("user") and ra.get("token"):
         lines.update({"cheevos_enable": "true", "cheevos_username": ra["user"], "cheevos_token": ra["token"],

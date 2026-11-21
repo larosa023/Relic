@@ -28,6 +28,7 @@ from version import VERSION
 
 BUILDBOT = os.environ.get("RELIC_BUILDBOT", "https://buildbot.libretro.com")
 GITHUB_API = os.environ.get("RELIC_GITHUB_API", "https://api.github.com")
+DOLPHIN_SITE = os.environ.get("RELIC_DOLPHIN_SITE", "https://dolphin-emu.org")
 PLATFORM = "windows/x86_64"
 
 # Official releases of the standalone emulators: GitHub repo and which download is the Windows build.
@@ -36,6 +37,7 @@ STANDALONE_RELEASES = {
     "ps3": ("RPCS3/rpcs3-binaries-win", r"win64.*\.7z$"),
     "wiiu": ("cemu-project/Cemu", r"windows.*x64.*\.zip$"),
     "xbox": ("xemu-project/xemu", r"win.*x86_64.*release.*\.zip$|win-release\.zip$"),
+    "gamecube": ("dolphin-emu.org", None),  # not on GitHub: the newest release from dolphin-emu.org
     "xbox360": ("xenia-canary/xenia-canary-releases", r"windows.*\.zip$|xenia_canary.*\.zip$"),
 }
 
@@ -108,11 +110,11 @@ class Setup:
         s = self.library.system(sid)
         steps = []
         bios = None
-        if sid in standalone.EMULATORS:
-            if not standalone.find(sid, (self.config["emulators"] or {}).get(sid, "")):
-                emu = standalone.EMULATORS[sid]
-                if sid in STANDALONE_RELEASES:
-                    steps.append({"kind": "standalone", "id": sid, "label": emu["name"]})
+        if standalone.uses(sid, self.config):
+            if not standalone.exe_for(sid, self.config):
+                emu = standalone.info(sid)
+                if standalone.key(sid) in STANDALONE_RELEASES:
+                    steps.append({"kind": "standalone", "id": standalone.key(sid), "label": emu["name"]})
                 else:
                     return {"steps": [], "bios": None, "manual": f"{s.name} games run in {emu['name']}. Download it from {emu['site']}, then choose it in Settings → Other emulators."}
             return {"steps": steps, "bios": None, "manual": ""}
@@ -297,15 +299,29 @@ class Setup:
         raise RuntimeError(f"Couldn't download a core ({last}). Try again, or get one in RetroArch's Online Updater.")
 
     # ------------------------------------------------------------- standalone emulators
+    def _dolphin_url(self) -> tuple[str, str]:
+        """The newest stable Dolphin for 64-bit Windows, from the download page on dolphin-emu.org."""
+        page = _get_text(f"{DOLPHIN_SITE}/download/")
+        links = re.findall(r'https://dl\.dolphin-emu\.org/releases/[^"\'<>\s]+/dolphin-[^"\'<>\s]+-x64\.7z', page)
+        if not links:
+            raise RuntimeError("Couldn't find a Dolphin download. Get it from dolphin-emu.org, then choose it in Settings.")
+        url = links[0]
+        return url, url.rsplit("/", 2)[-2]
+
     def install_standalone(self, sid: str) -> None:
+        sid = standalone.key(sid)
         repo, pattern = STANDALONE_RELEASES[sid]
         name = standalone.EMULATORS[sid]["name"]
         self._set(phase=f"Finding the latest {name}")
-        data = json.loads(_get_text(f"{GITHUB_API}/repos/{repo}/releases/latest"))
-        assets = [a for a in data.get("assets", []) if re.search(pattern, a["name"], re.I)]
-        if not assets:
-            raise RuntimeError(f"Couldn't find a Windows download of {name}. Get it from {standalone.EMULATORS[sid]['site']}.")
-        archive = self._download(assets[0]["browser_download_url"], f"{name} {data.get('tag_name', '')}".strip())
+        if pattern is None:
+            url, tag = self._dolphin_url()
+            archive = self._download(url, f"{name} {tag}")
+        else:
+            data = json.loads(_get_text(f"{GITHUB_API}/repos/{repo}/releases/latest"))
+            assets = [a for a in data.get("assets", []) if re.search(pattern, a["name"], re.I)]
+            if not assets:
+                raise RuntimeError(f"Couldn't find a Windows download of {name}. Get it from {standalone.EMULATORS[sid]['site']}.")
+            archive = self._download(assets[0]["browser_download_url"], f"{name} {data.get('tag_name', '')}".strip())
         self._set(phase=f"Installing {name}", progress=None)
         dest = install_root() / "Emulators" / name.replace(" ", "")
         try:

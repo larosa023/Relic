@@ -42,7 +42,7 @@ def list_themes(dirs: list[Path]) -> list[dict]:
 class Context:
     def __init__(self, *, token, ra, library, art, config, meta, sessions, player,
                  ui_dir, theme_dirs, data_dir, window_api=None, updater=None, restart=None, activate=None, setup=None,
-                 details=None, states=None):
+                 details=None, states=None, backups=None):
         self.token, self.ra, self.library, self.art = token, ra, library, art
         self.config, self.meta, self.sessions, self.player = config, meta, sessions, player
         self.ui_dir, self.theme_dirs, self.data_dir = ui_dir, theme_dirs, data_dir
@@ -53,6 +53,7 @@ class Context:
         self.setup = setup
         self.details = details
         self.states = states
+        self.backups = backups
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -159,6 +160,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(c.updater.snapshot() if c.updater else {})
         if path == "/api/setup":
             return self._json(c.setup.snapshot() if c.setup else {})
+        if path == "/api/stats":
+            import backup
+            return self._json(backup.stats(list(c.sessions.data), c.library))
         if path == "/api/library":
             q = parse_qs(parts.query)
             if "rev" in q:  # wait for the background rescan to change something
@@ -180,6 +184,7 @@ class Handler(BaseHTTPRequestHandler):
             "update": c.updater.snapshot() if c.updater else None,
             "emulators": self._emulators(),
             "setup": c.setup.snapshot() if c.setup else None,
+            "backup": c.backups.latest() if c.backups else None,
             "retroarch": {
                 "found": ra.found,
                 "exe": str(ra.exe or ""),
@@ -193,6 +198,20 @@ class Handler(BaseHTTPRequestHandler):
         c = self.ctx
         if refresh:
             c.library.refresh()
+        c.library.games()
+        # The full list is rebuilt only when something in it changed (games, favorites, play time,
+        # saves, details); otherwise the last one is sent again straight away.
+        key = (c.library.rev, c.meta.version, c.sessions.version, bool(c.config["game_details"]), bool(c.config["dolphin_standalone"]),
+               len(c.states.stems()) if c.states else 0, id(c.config["collections"]))
+        cached = getattr(c, "_lib_cache", None)
+        if cached and cached[0] == key:
+            return cached[1]
+        out = self._build_library()
+        c._lib_cache = (key, out)
+        return out
+
+    def _build_library(self) -> dict:
+        c = self.ctx
         games = c.library.games()
         totals = c.sessions.totals()
         details = c.config["game_details"] and c.details
@@ -211,7 +230,7 @@ class Handler(BaseHTTPRequestHandler):
                 "played": t.get("seconds", 0),
                 "last": t.get("last", 0),
                 "plays": t.get("plays", 0),
-                "resumable": bool(c.states and g["system"] not in standalone.EMULATORS and c.states.has(g["path"])),
+                "resumable": bool(c.states and not standalone.uses(g["system"], c.config) and c.states.has(g["path"])),
                 **{k: info[k] for k in ("year", "genre", "players", "developer", "publisher") if k in info},
             })
         return {"games": out, "systems": c.library.systems_public(), "rev": c.library.rev}
@@ -228,7 +247,11 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/api/config":
                 before = {k: c.config[k] for k in ("retroarch_path", "rom_folders", "hidden_playlists")}
+                was_auto = c.config["start_with_windows"]
                 c.config.update(body)
+                if "start_with_windows" in body and bool(body["start_with_windows"]) != bool(was_auto):
+                    import backup
+                    backup.set_autostart(bool(body["start_with_windows"]))
                 if c.config["retroarch_path"] != before["retroarch_path"]:
                     c.ra.find(c.config["retroarch_path"] or None)
                 if any(c.config[k] != v for k, v in before.items()):
@@ -255,6 +278,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._ra(body)
             if path == "/api/collections":
                 return self._collections(body)
+            if path == "/api/backup":
+                return self._backup(body)
             if path == "/api/customart":
                 return self._custom_art(body)
             if path == "/api/activate":  # a second copy of Relic was opened: show this one
@@ -280,7 +305,7 @@ class Handler(BaseHTTPRequestHandler):
             # Something's missing: the page offers to get it (or says which BIOS to add).
             return self._json({"ok": False, "code": "setup", "title": g["title"], "need": need,
                                "error": need["manual"] or "Setup needed"}, 409)
-        if g["system"] in standalone.EMULATORS:
+        if standalone.uses(g["system"], c.config):
             return self._launch_standalone(g)
         core = c.library.core_path(g, c.meta.get(gid))
         if not core:
@@ -290,7 +315,7 @@ class Handler(BaseHTTPRequestHandler):
                                f"Get {want} from RetroArch's Online Updater → Core Downloader.")
         fs = bool(c.config["launch_fullscreen"])
         import extras
-        override = extras.write_override(c.data_dir / "relic-retroarch.cfg", c.config, resume=not fresh)
+        override = extras.write_override(c.data_dir / "relic-retroarch.cfg", c.config, resume=not fresh, system=g["system"])
         shader = extras.crt_shader(c.ra, c.config, g["system"])
         if c.states:
             c.states.forget()
@@ -319,7 +344,7 @@ class Handler(BaseHTTPRequestHandler):
             import setup_wizard
             if sid not in setup_wizard.STANDALONE_RELEASES:
                 raise RuntimeError("Relic can't download that one; choose it instead")
-            if not c.setup.start([{"kind": "standalone", "id": sid, "label": standalone.EMULATORS[sid]["name"]}]):
+            if not c.setup.start([{"kind": "standalone", "id": sid, "label": standalone.info(sid)["name"]}]):
                 raise RuntimeError("Already setting something up")
             return self._json({"ok": True} | c.setup.snapshot())
         if act == "assets":
@@ -374,6 +399,23 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True})
         return self._json({"ok": False, "error": "unknown"}, 404)
 
+    def _backup(self, body):
+        c = self.ctx
+        act = body.get("action")
+        if act == "folder":
+            p = str(body.get("path", "")).strip()
+            if not p:
+                raise RuntimeError("Choose a folder.")
+            c.config.update({"backup_dir": p})
+            act = "now"
+        if act == "now":
+            r = c.backups.run("manual")
+            return self._json({"ok": True, "latest": c.backups.latest(), "made": r})
+        if act == "off":
+            c.config.update({"backup_dir": ""})
+            return self._json({"ok": True, "latest": None})
+        return self._json({"ok": False, "error": "unknown"}, 404)
+
     def _collections(self, body):
         """Your own shelves. Actions: create (name, game?), add/remove (cid, game), rename (cid, name), delete (cid)."""
         import secrets
@@ -403,8 +445,8 @@ class Handler(BaseHTTPRequestHandler):
     def _launch_standalone(self, g):
         c = self.ctx
         sid = g["system"]
-        emu = standalone.EMULATORS[sid]
-        exe = standalone.find(sid, (c.config["emulators"] or {}).get(sid, ""))
+        emu = standalone.info(sid)
+        exe = standalone.exe_for(sid, c.config)
         if not exe:
             s = c.library.system(sid)
             raise RuntimeError(f"{s.name} games run in {emu['name']}, which isn't on this PC yet. "
@@ -420,11 +462,14 @@ class Handler(BaseHTTPRequestHandler):
         chosen = c.config["emulators"] or {}
         out = []
         for sid, emu in standalone.EMULATORS.items():
+            if sid in standalone.OPTIONAL and not c.config["dolphin_standalone"]:
+                continue
             s = c.library.system(sid)
             exe = standalone.find(sid, chosen.get(sid, ""))
             import setup_wizard
-            out.append({"id": sid, "system": s.name if s else sid, "name": emu["name"], "site": emu["site"],
-                        "exe": str(exe or ""), "has_games": sid in have,
+            label = "GameCube & Wii" if sid == "gamecube" else (s.name if s else sid)
+            out.append({"id": sid, "system": label, "name": emu["name"], "site": emu["site"],
+                        "exe": str(exe or ""), "has_games": sid in have or any(standalone.key(x) == sid for x in have),
                         "downloadable": sid in setup_wizard.STANDALONE_RELEASES})
         return out
 

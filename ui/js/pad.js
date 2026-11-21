@@ -192,6 +192,9 @@ async function inFront(now) {
 }
 async function poll(now) {
   requestAnimationFrame(poll);
+  // While a game is running Relic only needs to notice you coming back: check 4 times a second, not 60.
+  if (R.S.playing && now - (P.lastPoll || 0) < 250) return;
+  P.lastPoll = now;
   if (N.capturing) {
     const raw = rawHeld();
     for (const i of raw) if (!P.rawPrev.has(i) && !(i in DPAD)) { P.rawPrev = raw; P.prev = held(); return N.capturing.cb({ pad: i }); }

@@ -33,10 +33,40 @@ EMULATORS = {
     "xbox": {"name": "xemu", "site": "xemu.app",
              "exe": ["xemu.exe"], "dirs": ["xemu"],
              "args": ["-dvd_path", "{game}"], "fullscreen": ["-full-screen"]},
+    # GameCube and Wii share one Dolphin. Used instead of RetroArch's (older) Dolphin core unless you turn
+    # that off in Settings; it's faster and opens every format (RVZ, WIA, GCZ, WBFS).
+    "gamecube": {"name": "Dolphin", "site": "dolphin-emu.org",
+                 "exe": ["Dolphin.exe", "dolphin.exe"], "dirs": ["Dolphin", "dolphin"],
+                 "args": ["-b", "-e", "{game}"], "fullscreen": ["-C", "Dolphin.Display.Fullscreen=True"]},
     "xbox360": {"name": "Xenia Canary", "site": "xenia.jp",
                 "exe": ["xenia_canary.exe", "xenia.exe"], "dirs": ["xenia", "xenia_canary", "Xenia"],
                 "args": ["{game}"], "fullscreen": ["--fullscreen=true"]},
 }
+
+
+SHARED = {"wii": "gamecube"}   # these systems use another system's emulator (Wii games run in Dolphin too)
+OPTIONAL = {"gamecube", "wii"}  # RetroArch can run these too; Settings picks which
+
+
+def key(sid: str) -> str:
+    """The emulator entry a system uses ("wii" -> "gamecube": both Dolphin)."""
+    return SHARED.get(sid, sid)
+
+
+def uses(sid: str, cfg) -> bool:
+    """Does this system start in a standalone emulator (rather than RetroArch)?"""
+    if sid in OPTIONAL:
+        return bool(cfg["dolphin_standalone"])
+    return key(sid) in EMULATORS
+
+
+def info(sid: str) -> dict:
+    return EMULATORS[key(sid)]
+
+
+def exe_for(sid: str, cfg) -> Path | None:
+    k = key(sid)
+    return find(k, (cfg["emulators"] or {}).get(k, ""))
 
 
 def _roots() -> list[Path]:
@@ -109,7 +139,7 @@ def _exe_in(folder: Path, names: set[str], depth: int):
 
 
 def launch(sid: str, exe: Path, game_path: str, fullscreen: bool) -> subprocess.Popen:
-    emu = EMULATORS[sid]
+    emu = info(sid)
     if not Path(game_path).exists():
         raise RuntimeError("That game's file has moved or been deleted.")
     args = [str(exe)] + (emu["fullscreen"] if fullscreen else []) + [a.replace("{game}", game_path) for a in emu["args"]]

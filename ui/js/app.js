@@ -13,6 +13,7 @@ const SORT_LABEL = { title: "A–Z", recent: "Recently played", played: "Most pl
 // ---------- loading ----------
 async function loadState() {
   const st = await R.api("/api/state");
+  S.backup = st.backup;
   S.config = st.config; S.themes = st.themes; S.emulators = st.emulators || []; S.ra = st.retroarch; S.native = st.native; S.version = st.version;
   setPlaying(st.playing);
   applyTheme(S.config.theme);
@@ -81,6 +82,7 @@ function renderHome(focusKey) {
   const games = visibleGames();
   $("#sys-rail").innerHTML = `<div class="sys sys-search" data-nav data-do="search" data-key="search"><div class="sys-name">Search</div><div class="sys-count">Every game you have</div></div>`
     + S.systems.filter((s) => games.some((g) => g.system === s.id)).map(sysTile).join("")
+    + (S.games.some((g) => g.plays) ? `<div class="sys sys-stats" data-nav data-do="stats" data-key="stats"><div class="sys-name">Stats</div><div class="sys-count">${esc(R.playtime(S.games.reduce((a, g) => a + g.played, 0)).replace(" played", ""))} played</div></div>` : "")
     + `<div class="sys sys-settings" data-nav data-do="settings" data-key="settings"><div class="sys-name">Settings</div><div class="sys-count">${S.update && (S.update.available || S.update.ready) ? '<span class="badge">Update ready</span>' : "RetroArch, folders, look"}</div></div>`;
   const rows = [];
   const recent = games.filter((g) => g.last).sort((a, b) => b.last - a.last).slice(0, 14);
@@ -155,9 +157,11 @@ function sortGames(list) {
   return [...list].sort((a, b) => (b.favorite - a.favorite) || by(a, b));
 }
 
+const shelfSpot = {};  // system id -> the game you were on, so going back to a shelf lands there
 function openShelf(sid, focusId, keepScroll = false) {
   const s = S.sysById[sid];
   if (!s) return renderHome();
+  focusId = focusId || shelfSpot[sid];
   const scroll = keepScroll && shelfSys === sid ? $("#shelf").scrollTop : 0;
   shelfSys = sid;
   const all = visibleGames().filter((g) => g.system === sid);
@@ -234,29 +238,83 @@ $("#back-btn").addEventListener("click", () => R.nav.press("b"));
 // Clicking outside the game options box closes it.
 $("#game-pop").addEventListener("mousedown", (e) => { if (e.target.id === "game-pop") { R.sound("back"); closePop(); } });
 
+// ---------- stats ----------
+async function openStats() {
+  R.sound("select");
+  lastHomeFocus = R.nav.cur && R.nav.cur.dataset.key;
+  let st;
+  try { st = await R.api("/api/stats"); } catch (e) { return R.toast(e.message, true); }
+  const hrs = (s) => s >= 3600 ? `${(s / 3600).toFixed(s >= 36000 ? 0 : 1)} h` : `${Math.max(1, Math.round(s / 60))} min`;
+  const max = Math.max(1, ...st.week.map((d) => d.seconds));
+  const sysMax = Math.max(1, ...st.systems.map((x) => x.seconds));
+  const tile = (n, label) => `<div class="st-tile"><div class="st-n">${n}</div><div class="st-l">${label}</div></div>`;
+  const lg = st.longest && S.byId[st.longest.id];
+  $("#stats-body").innerHTML = `
+    <div class="st-tiles">
+      ${tile(hrs(st.total), "played in total")}
+      ${tile(st.games, `game${st.games === 1 ? "" : "s"} played`)}
+      ${tile(st.sessions, `session${st.sessions === 1 ? "" : "s"}`)}
+      ${tile(`${st.streak} day${st.streak === 1 ? "" : "s"}`, `streak · best ${st.best_streak}`)}
+    </div>
+    <div class="st-cols">
+      <div class="st-box">
+        <h2>This week</h2>
+        <div class="st-week">${st.week.map((d) => `<div class="st-day"><div class="st-bar"><i style="height:${Math.round(d.seconds / max * 100)}%"></i></div><span>${d.day}</span><em>${d.seconds ? hrs(d.seconds) : ""}</em></div>`).join("")}</div>
+        ${lg ? `<p class="hint">Longest session: ${esc(lg.title)}, ${hrs(st.longest.seconds)} on ${new Date(st.longest.when * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" })}.</p>` : ""}
+      </div>
+      <div class="st-box">
+        <h2>By system</h2>
+        ${st.systems.map((x) => { const s = S.sysById[x.id] || { name: x.id }; return `<div class="st-sys"><span>${esc(s.name)}</span><div class="st-hbar"><i style="width:${Math.round(x.seconds / sysMax * 100)}%;background:${R.sysColor(x.id)}"></i></div><em>${hrs(x.seconds)}</em></div>`; }).join("")}
+      </div>
+    </div>
+    <h2 class="row-title">Most played</h2>
+    <div class="rail cards">${st.top.map((t) => S.byId[t.id]).filter(Boolean).map((g) => card(g, `stats:${g.id}`)).join("")}</div>`;
+  show("stats");
+  $("#stats").scrollTop = 0;
+  R.nav.focus($("#stats [data-nav]"), { scroll: false });
+}
+
 function renderCrumb() {
   updateBack();
   const c = $("#crumb");
   if (screen === "shelf" && S.sysById[shelfSys]) c.innerHTML = `<span>${esc(S.sysById[shelfSys].name)}</span>`;
   else if (screen === "settings") c.innerHTML = "<span>Settings</span>";
+  else if (screen === "stats") c.innerHTML = "<span>Stats</span>";
   else c.innerHTML = "";
 }
 
 // ---------- backdrop: the focused game's screenshot, softly ----------
-let bdTimer = 0, bdFlip = false, bdUrl = "";
+let bdTimer = 0, bdFlip = false, bdUrl = "", slideTimer = 0;
+/** Resting on a game: the backdrop slowly switches between its screenshot and title screen. */
+function slideshow(g) {
+  clearInterval(slideTimer);
+  let n = 0;
+  slideTimer = setInterval(() => {
+    if (document.hidden || S.playing || !R.nav.cur || R.nav.cur.dataset.game !== g.id) return clearInterval(slideTimer);
+    n++;
+    setBackdrop(art(g, n % 2 ? "title" : "snap"), R.sysColor(g.system));
+  }, 7000);
+}
 function setBackdrop(url, color) {
   document.documentElement.style.setProperty("--focus-sys", color || "transparent");
   if (url === bdUrl) return;
   bdUrl = url;
-  const next = bdFlip ? $("#bd-a") : $("#bd-b"), prev = bdFlip ? $("#bd-b") : $("#bd-a");
-  bdFlip = !bdFlip;
-  prev.classList.remove("on");
-  if (!url) { next.classList.remove("on"); return; }
+  const swap = (src) => {  // fade the new picture in over the old one, only once it has loaded
+    const next = bdFlip ? $("#bd-a") : $("#bd-b"), prev = bdFlip ? $("#bd-b") : $("#bd-a");
+    bdFlip = !bdFlip;
+    prev.classList.remove("on");
+    if (src) { next.style.backgroundImage = `url("${src}")`; next.classList.add("on"); }
+    else next.classList.remove("on");
+  };
+  if (!url) return swap("");
   const img = new Image();
-  img.onload = () => { if (bdUrl === url) { next.style.backgroundImage = `url("${url}")`; next.classList.add("on"); } };
+  img.onload = () => { if (bdUrl === url) swap(url); };
   img.onerror = () => {
-    // No screenshot: fall back to the box art, which the blur makes work as a backdrop.
-    if (bdUrl === url && url.endsWith("/snap")) { bdUrl = ""; setBackdrop(url.replace(/\/snap$/, "/boxart"), color); }
+    if (bdUrl !== url) return;
+    // No screenshot: the box art, blurred, works as a backdrop. No title screen: keep what's showing.
+    if (url.endsWith("/snap")) { bdUrl = ""; setBackdrop(url.replace(/\/snap$/, "/boxart"), color); }
+    else if (url.endsWith("/title")) clearInterval(slideTimer);
+    else swap("");
   };
   img.src = url;
 }
@@ -264,9 +322,11 @@ document.addEventListener("relic:focus", (e) => {
   const el = e.detail;
   hints();
   clearTimeout(bdTimer);
+  clearInterval(slideTimer);
+  if (screen === "shelf" && el.dataset.game) shelfSpot[shelfSys] = el.dataset.game;
   bdTimer = setTimeout(() => {
     const g = el.dataset.game && S.byId[el.dataset.game];
-    if (g) setBackdrop(art(g, "snap"), R.sysColor(g.system));
+    if (g) { setBackdrop(art(g, "snap"), R.sysColor(g.system)); slideshow(g); }
     else if (el.dataset.sys) setBackdrop("", R.sysColor(el.dataset.sys));
     else setBackdrop("", "");
   }, 220);
@@ -739,6 +799,9 @@ const TOGGLES = [
   ["resume", "Resume games where you left off"],
   ["quit_combo", "Select + Start quits a game"],
   ["game_details", "Show game details (year, genre, players)"],
+  ["speed_keys", "Hold RT to fast-forward, LT to rewind (retro consoles)"],
+  ["dolphin_standalone", "GameCube & Wii in standalone Dolphin (faster, opens RVZ)"],
+  ["start_with_windows", "Start Relic with Windows"],
   ["check_updates", "Check for updates when Relic starts"],
 ];
 function renderSettings(focusDo) {
@@ -766,6 +829,15 @@ function renderSettings(focusDo) {
     `<button class="btn theme${t.id === S.config.theme ? " on" : ""}" data-nav data-do="theme" data-id="${t.id}">
       <span class="sw">${(t.swatch || []).map((c) => `<i style="background:${esc(c)}"></i>`).join("")}</span>${esc(t.name)}</button>`).join("");
   renderControls();
+  const bk = S.backup;
+  $("#backup-box").innerHTML = S.config.backup_dir
+    ? `<p class="hint">Your saves, Resume points, favorites and play history are zipped into <span class="mono">${esc(S.config.backup_dir)}</span> after you play (the newest 10 are kept).
+        ${bk ? `Last backup ${esc(R.ago(bk.time))}.` : "No backup yet."}</p>
+       <button class="btn" data-nav data-do="backup-now">Back up now</button>
+       <button class="btn" data-nav data-do="backup-folder">Change folder…</button>
+       <button class="btn" data-nav data-do="backup-off">Turn off backups</button>`
+    : `<p class="hint">Keep your saves safe from a reinstall or a new PC: pick a folder, like one in OneDrive, and Relic backs up after every session.</p>
+       <button class="btn" data-nav data-do="backup-folder">Choose a backup folder…</button>`;
   const look = S.config.look || "box";
   $("#look-opts").innerHTML = [["box", "Box art"], ["physical", "Physical"]].map(([v, t]) =>
     `<button class="btn theme${look === v ? " on" : ""}" data-nav data-do="look" data-v="${v}">${t}</button>`).join("");
@@ -868,6 +940,8 @@ async function doAction(el) {
       const [k, , on, off] = t;
       const v = on ? (S.config[k] === on ? off : on) : S.config[k] === false;
       await R.setConfig({ [k]: v });
+      if (k === "dolphin_standalone") { await loadState(); await loadLibrary(); }
+      if (k === "start_with_windows") R.toast(v ? "Relic will open when you sign in to Windows" : "Relic won't open with Windows");
       return renderSettings(`[data-k="${k}"]`);
     }
     if (d === "theme") {
@@ -912,6 +986,29 @@ async function doAction(el) {
       const r = await R.api("/api/collections", { action: "delete", cid: el.dataset.cid });
       S.config.collections = r.collections;
       return renderSettings('[data-do="bios-import"]');
+    }
+    if (d === "stats") return openStats();
+    if (d === "backup-folder") {
+      const p = await pickFolder();
+      if (!p) return;
+      R.toast("Backing up…");
+      await R.api("/api/backup", { action: "folder", path: p });
+      await loadState();
+      renderSettings('[data-do="backup-now"]');
+      return R.toast("Backed up. Relic will keep doing it after you play");
+    }
+    if (d === "backup-now") {
+      R.toast("Backing up…");
+      const r = await R.api("/api/backup", { action: "now" });
+      await loadState();
+      renderSettings('[data-do="backup-now"]');
+      return R.toast(`Backed up ${r.made.files} file${r.made.files === 1 ? "" : "s"}`);
+    }
+    if (d === "backup-off") {
+      await R.api("/api/backup", { action: "off" });
+      await loadState();
+      renderSettings('[data-do="backup-folder"]');
+      return R.toast("Backups off. Old ones are still in that folder");
     }
     if (d === "look") {
       await R.setConfig({ look: el.dataset.v });
@@ -1035,6 +1132,7 @@ R.nav.on((btn) => {
     if (btn === "b") { closeSettings(); return true; }
     return false;
   }
+  if (screen === "stats" && btn === "b") { R.sound("back"); renderHome(lastHomeFocus || "stats"); return true; }
   if (btn === "a") {
     if (g) { launch(g); return true; }
     if (cur && cur.dataset.sys) { R.sound("select"); lastHomeFocus = cur.dataset.key; openShelf(cur.dataset.sys); return true; }

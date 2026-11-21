@@ -50,6 +50,12 @@
     <div class="grid" id="grid"></div>
   </section>
 
+  <!-- Your play stats -->
+  <section class="screen" id="stats" hidden>
+    <h1>Your games</h1>
+    <div id="stats-body"></div>
+  </section>
+
   <!-- Settings -->
   <section class="screen" id="settings" hidden>
     <h1>Settings</h1>
@@ -72,6 +78,8 @@
         <p class="hint">Some consoles need a BIOS from your own console. Point Relic at the folder you keep them in: it recognises each one and puts it where its emulator looks, now and after every new install.</p>
         <div id="bios-status"></div>
         <button class="btn" data-nav data-do="bios-import">Import BIOS files…</button>
+        <h2>Save backups</h2>
+        <div id="backup-box"></div>
         <h2>RetroAchievements</h2>
         <div id="ra-box"></div>
         <h2>Collections</h2>

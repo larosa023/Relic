@@ -20,7 +20,8 @@ DEFAULTS = {
     "sounds": True,
     "shelf_sort": "title",      # title | recent | played
     "controller_nav": True,
-    "emulators": {},            # {"ps4": "C:\\...\\shadPS4.exe"}: standalone emulators you chose
+    "emulators": {},
+    "dolphin_standalone": True, # GameCube/Wii in standalone Dolphin (faster, opens RVZ) instead of RetroArch's core            # {"ps4": "C:\\...\\shadPS4.exe"}: standalone emulators you chose
     "pad_map": {},              # {"a": 1, "b": 0}: your controller layout (standard button numbers)
     "key_map": {},              # {"x": ["g"]}: your keyboard layout
     "resume": True,             # RetroArch saves when you quit and picks up there next time
@@ -31,6 +32,9 @@ DEFAULTS = {
     "retroachievements": {},    # {"user", "token", "hardcore"}: never the password
     "collections": [],          # [{"id", "name", "games": [game ids]}]
     "bios_dir": "",             # where your BIOS files are; Relic re-imports from it after new installs
+    "speed_keys": True,         # hold RT to fast-forward, LT to rewind (retro consoles)
+    "backup_dir": "",           # where save backups go (a OneDrive folder works well)
+    "start_with_windows": False,
     "check_updates": True,      # look for a new Relic on GitHub when it starts
     "seen_version": "",
 }

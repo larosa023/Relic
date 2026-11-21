@@ -281,6 +281,27 @@ body.native:not(.win-max):not(.fullscreen):not(.framed) { box-shadow: inset 0 0 
 .pop { max-height: 90vh; }
 .pop-body { overflow-y: auto; scrollbar-width: none; }
 
+/* ---------- stats ---------- */
+#stats h1 { font-size: calc(var(--u) * 2.4); margin: .2em 0 .7em; }
+.st-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11em), 1fr)); gap: calc(var(--u) * 1); margin-bottom: calc(var(--u) * 1.6); }
+.st-tile, .st-box { padding: 1.1em 1.2em; border-radius: calc(var(--radius) * 1.3); background: color-mix(in srgb, var(--surface) 85%, transparent); border: 1px solid var(--border); }
+.st-n { font-size: calc(var(--u) * 2.2); font-weight: 800; line-height: 1.1; color: var(--accent); }
+.st-l { color: var(--dim); margin-top: .2em; }
+.st-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24em), 1fr)); gap: calc(var(--u) * 1); }
+.st-box h2 { font-size: .8em; text-transform: uppercase; letter-spacing: .18em; color: var(--dim); margin: 0 0 1em; }
+.st-week { display: flex; gap: .7em; height: calc(var(--u) * 9); align-items: stretch; margin-bottom: .8em; }
+.st-day { flex: 1; display: flex; flex-direction: column; align-items: center; gap: .3em; min-width: 0; }
+.st-bar { flex: 1; width: 100%; display: flex; align-items: flex-end; border-radius: 6px; background: var(--surface-2); overflow: hidden; }
+.st-bar i { display: block; width: 100%; background: var(--accent); border-radius: 6px 6px 0 0; min-height: 0; }
+.st-day span { font-size: .8em; color: var(--dim); }
+.st-day em { font-style: normal; font-size: .7em; color: var(--dim); height: 1em; }
+.st-sys { display: grid; grid-template-columns: 9em 1fr 4.5em; align-items: center; gap: .8em; margin: .55em 0; }
+.st-sys span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-sys em { font-style: normal; color: var(--dim); text-align: right; font-size: .9em; }
+.st-hbar { height: 10px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.st-hbar i { display: block; height: 100%; border-radius: 99px; }
+.sys-stats { --sys: #8a7a5a; }
+
 /* ---------- setup ---------- */
 .pop.setup { width: min(92vw, calc(var(--u) * 34)); }
 .setup-p { margin: 0 0 .8em; color: var(--text); }

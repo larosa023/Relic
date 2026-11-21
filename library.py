@@ -212,7 +212,7 @@ class Library:
             d = s.public()
             d["count"] = n
             d["cores"] = self.cores_for(s)
-            d["standalone"] = standalone.EMULATORS[sid]["name"] if sid in standalone.EMULATORS else ""
+            d["standalone"] = standalone.info(sid)["name"] if standalone.uses(sid, self.config) else ""
             out.append(d)
         out.sort(key=lambda d: (order.index(d["id"]) if d["id"] in order else 999, d["name"]))
         return out

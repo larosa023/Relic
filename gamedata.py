@@ -20,7 +20,10 @@ class _Store:
         except (OSError, ValueError):
             self.data = default
 
+    version = 0  # goes up on every save, so the server knows when to rebuild what it sends
+
     def _save(self):
+        self.version += 1
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(self.data), encoding="utf-8")
         os.replace(tmp, self.path)
