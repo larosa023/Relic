@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="/ui/app.css">
 <link rel="stylesheet" id="theme-css" href="/themes/relic.css">
 <script>window.RELIC_TOKEN = "{{TOKEN}}"; window.RELIC_VERSION = "{{VERSION}}";</script>
+<script type="importmap">{ "imports": { "three": "/ui/vendor/three.module.min.js" } }</script>
 </head>
 <body>
 <div id="backdrop"><div class="bd-img" id="bd-a"></div><div class="bd-img" id="bd-b"></div><div class="bd-shade"></div></div>
@@ -29,7 +30,14 @@
 <main id="screens">
   <!-- Home: systems + rows -->
   <section class="screen" id="home" hidden>
-    <div class="row-title">Systems</div>
+    <!-- 3D stage: your consoles on pedestals -->
+    <div id="stage-wrap" hidden>
+      <canvas id="stage-canvas"></canvas>
+      <div class="stage-hit" data-nav data-stage data-key="stage"></div>
+      <div class="stage-info" id="stage-info"></div>
+      <div class="stage-tools" id="stage-tools"></div>
+    </div>
+    <div class="row-title" id="sys-title">Systems</div>
     <div class="rail" id="sys-rail"></div>
     <div id="home-rows"></div>
     <div id="empty" class="empty" hidden></div>
@@ -92,6 +100,9 @@
       <div class="set-group">
         <h2>Couch</h2>
         <div id="toggles"></div>
+        <h2>Home screen</h2>
+        <p class="hint">Stage shows your consoles in 3D on a turning stage. Tiles is the flat row of systems.</p>
+        <div class="themes" id="home-opts"></div>
         <h2>Covers</h2>
         <p class="hint">Physical shows each game as its case or cartridge: disc cases for PS2 and GameCube, CD cases for PlayStation, cartridges for NES, SNES, N64 and Game Boy.</p>
         <div class="themes" id="look-opts"></div>

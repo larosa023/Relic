@@ -261,12 +261,28 @@ def main() -> None:
     _write_instance(ddir, srv.server_address[1], ctx.token)
     import webview
 
+    # Open where you left it (when it was a normal window, on a screen that's still there).
+    wb = cfg["window"] or {}
+    size = {"width": int(wb.get("width") or 1280), "height": int(wb.get("height") or 760)}
+    if wb.get("x") is not None and wb.get("y") is not None and -50 < int(wb["x"]) < 10000 and -50 < int(wb["y"]) < 10000:
+        size.update(x=int(wb["x"]), y=int(wb["y"]))
     window = webview.create_window(
-        "Relic", url, width=1280, height=760, min_size=(900, 560),
+        "Relic", url, min_size=(900, 560), **size,
         frameless=bool(cfg["frameless"]), easy_drag=False,
         background_color="#0a0a0f", js_api=window_api,
     )
     window_api._attach(window)
+
+    def remember_window():
+        try:
+            if window_api._fs or (IS_WIN and window_api._snap.state != "normal"):
+                return  # full screen or maximized: keep the last normal size
+            w, h = int(window.width), int(window.height)
+            if w >= 900 and h >= 560:
+                cfg.update({"window": {"x": int(window.x), "y": int(window.y), "width": w, "height": h}})
+        except Exception:
+            log.exception("couldn't remember the window size")
+    window.events.closing += remember_window
     if cfg["start_fullscreen"] and not args.windowed:
         window.events.shown += lambda: threading.Timer(0.3, lambda: window_api.fullscreen(True)).start()
     webview.start(private_mode=False, storage_path=str(ddir / "webview"))

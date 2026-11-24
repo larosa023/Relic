@@ -1,3 +1,3 @@
 # Bump VERSION and push to main: GitHub builds Relic.exe and publishes the release.
-VERSION = "0.9.0"
+VERSION = "0.10.0"
 REPO = "larosa023/Relic"

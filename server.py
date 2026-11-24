@@ -12,6 +12,10 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 import art as artmod
+
+# Windows can map .js to text/plain from the registry, which stops module scripts loading.
+mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("model/gltf-binary", ".glb")
 import standalone
 from reliclog import log
 from version import VERSION

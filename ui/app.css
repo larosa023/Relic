@@ -281,6 +281,26 @@ body.native:not(.win-max):not(.fullscreen):not(.framed) { box-shadow: inset 0 0 
 .pop { max-height: 90vh; }
 .pop-body { overflow-y: auto; scrollbar-width: none; }
 
+.pop-shots { display: flex; gap: .6em; margin-top: .9em; }
+.pop-shots img { height: calc(var(--u) * 6); border-radius: calc(var(--radius) * .6); box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+.pop-shots:empty { display: none; }
+
+/* ---------- 3D stage ---------- */
+#stage-wrap { position: relative; height: max(calc(var(--u) * 26), 58vh); margin: calc(var(--u) * -1.2) calc(var(--u) * -2.4) 0; }
+#stage-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab;
+  -webkit-mask-image: linear-gradient(180deg, #000 70%, transparent); mask-image: linear-gradient(180deg, #000 70%, transparent); }
+.stage-hit { position: absolute; inset: 0; pointer-events: none; border-radius: calc(var(--radius) * 2); }
+.stage-info { position: absolute; left: calc(var(--u) * 2.4); bottom: calc(var(--u) * 1.4); pointer-events: none; text-shadow: 0 2px 14px rgba(0,0,0,.7); }
+.si-maker { font-size: .8em; text-transform: uppercase; letter-spacing: .22em; color: color-mix(in srgb, var(--text) 70%, transparent); }
+.si-name { font-size: calc(var(--u) * 3.2); font-weight: 800; line-height: 1.05; margin: .08em 0 .12em;
+  background: linear-gradient(90deg, var(--text), color-mix(in srgb, var(--sys, var(--accent)) 55%, var(--text))); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.si-meta { color: var(--dim); }
+/* the stage's focus: an underline glow under the console name, and arrows */
+.stage-hit.focus ~ .stage-info .si-name::after { content: " ‹ ›"; font-size: .45em; vertical-align: middle; color: var(--accent); -webkit-text-fill-color: var(--accent); }
+.stage-hit.focus ~ .stage-info::after { content: ""; display: block; height: 3px; width: calc(var(--u) * 6); margin-top: .6em; border-radius: 3px; background: var(--accent); box-shadow: 0 0 12px var(--glow); }
+.stage-tools { position: absolute; top: calc(var(--u) * .4); right: calc(var(--u) * 2.4); display: flex; gap: .5em; }
+.stage-tools .badge { font-size: .75em; margin-left: .3em; }
+
 /* ---------- stats ---------- */
 #stats h1 { font-size: calc(var(--u) * 2.4); margin: .2em 0 .7em; }
 .st-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11em), 1fr)); gap: calc(var(--u) * 1); margin-bottom: calc(var(--u) * 1.6); }

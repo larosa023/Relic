@@ -7,6 +7,7 @@ Relic reads what RetroArch already knows (its playlists, cores and thumbnails) a
 ## Features
 
 - **Couch first**: opens full screen, driven by a controller. D-pad or stick moves (hold to scroll faster), **A** plays, **X** favorites, **Y** opens game options, **LB/RB** jump between systems, **Select** changes the sort, **Start** opens settings, **B** goes back. Mouse and keyboard work too: there's a **Back** button in the top bar, and the mouse's side back button goes back.
+- **3D stage**: the home screen shows your consoles as 3D models on pedestals in a ring. The one in front turns slowly under a spotlight in its color. Turn with left/right (or LB/RB, drag, or the mouse wheel) and press A to open its shelf. Consoles without a model appear as a plain box in their color. Settings → Home screen switches back to flat tiles.
 - **Your systems up front**: a row of system tiles (SNES, Genesis, PlayStation…) with game counts, then **Continue playing** and **Favorites**.
 - **Fast with big libraries**: the library is kept on disk, so Relic opens instantly and rescans quietly in the background, updating the screen if something changed. Shelves with thousands of games open in a blink, and moving stays instant.
 - **Find games quickly**: **LT/RT** (Page Up/Down) jump a shelf by letter. **Select** at home is *Surprise me*, a random pick nudged toward games you haven't played much. A *Recently added* row shows new games.
@@ -64,3 +65,9 @@ Options: `--windowed` starts in a window, and `--browser` runs it in your web br
 | `server.py` | the local API the UI talks to (127.0.0.1 only) |
 | `ui/` | the couch UI: `core.js` helpers, `pad.js` controller and keyboard, `app.js` screens |
 | `themes/` | built-in themes |
+
+## Credits
+
+- The 3D stage's console models are free Sketchfab models by their authors, listed with their licenses in [ui/models/CREDITS.md](ui/models/CREDITS.md).
+- The stage idea, model choices and orientation come from [Cartucho](https://github.com/GabrielGoris/cartucho) (MIT).
+- 3D rendering by [three.js](https://threejs.org) (MIT), with meshoptimizer's decoder (MIT).

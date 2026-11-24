@@ -17,6 +17,7 @@ DEFAULTS = {
     "when_playing": "minimize", # minimize | none
     "restore_after_play": True,
     "frameless": True,
+    "window": {},               # last size and position in a window: {"x", "y", "width", "height"}
     "sounds": True,
     "shelf_sort": "title",      # title | recent | played
     "controller_nav": True,
@@ -26,6 +27,7 @@ DEFAULTS = {
     "key_map": {},              # {"x": ["g"]}: your keyboard layout
     "resume": True,             # RetroArch saves when you quit and picks up there next time
     "quit_combo": True,         # Select + Start closes the game and you're back in Relic
+    "home_style": "stage",      # stage (3D consoles) | rows (tiles)
     "look": "box",              # box | physical: covers as plain box art, or as each console's case/cartridge
     "crt": "off",               # off | retro | all: RetroArch's CRT shader
     "game_details": True,       # download year/genre/players from libretro's game database

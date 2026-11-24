@@ -31,7 +31,10 @@ async function loadLibrary(refresh = false) {
 function applyTheme(id) {
   const link = $("#theme-css");
   const href = `/themes/${id || "relic"}.css`;
-  if (link.getAttribute("href") !== href) link.setAttribute("href", href);
+  if (link.getAttribute("href") !== href) {
+    link.setAttribute("href", href);
+    link.addEventListener("load", () => stage && stage.retheme(), { once: true });
+  }
 }
 
 // ---------- pieces ----------
@@ -74,12 +77,73 @@ function show(name) {
   screen = name;
   for (const el of $$(".screen")) el.hidden = el.id !== name;
   document.body.dataset.screen = name;
+  stagePlay();
   renderCrumb();
   hints();
 }
 
+// ---------- 3D stage ----------
+let stage = null, stageTried = false, stageSys = null;
+const stageOn = () => S.config.home_style !== "rows" && stage !== false;
+function stageSystems() {
+  const games = visibleGames();
+  return S.systems.filter((s) => games.some((g) => g.system === s.id)).map((s) => ({ ...s, color: R.sysColor(s.id) }));
+}
+async function ensureStage() {
+  if (stage || stageTried) return stage;
+  stageTried = true;
+  try {
+    const mod = await import("/ui/js/stage.js");
+    stage = mod.createStage($("#stage-canvas"), {
+      onSelect: (s) => { stageSys = s.id; R.sound("move"); stageInfo(); },
+      onEnter: (s) => { R.sound("select"); lastHomeFocus = "stage"; openShelf(s.id); },
+    }) || false;
+    if (stage) stage.onLost(() => { stage.destroy(); stage = null; stageTried = false; setTimeout(() => screen === "home" && renderHome("stage"), 1200); });
+  } catch (e) {
+    console.warn("stage", e);
+    stage = false;
+  }
+  if (stage === false) R.toast("3D isn't available here, so Relic shows tiles instead");
+  return stage;
+}
+function stageInfo() {
+  const s = stage && stage.current;
+  if (!s) return;
+  const games = visibleGames().filter((g) => g.system === s.id);
+  const last = Math.max(0, ...games.map((g) => g.last || 0));
+  const plays = games.reduce((a, g) => a + (g.played || 0), 0);
+  $("#stage-info").innerHTML = `<div class="si-maker">${esc(s.maker)}${s.year ? ` · ${s.year}` : ""}</div>
+    <div class="si-name">${esc(s.name)}</div>
+    <div class="si-meta">${games.length} game${games.length === 1 ? "" : "s"}${plays ? ` · ${esc(R.playtime(plays))}` : ""}${last ? ` · last played ${esc(R.ago(last))}` : ""}</div>`;
+  $("#stage-wrap").style.setProperty("--sys", s.color);
+  if (R.nav.cur && R.nav.cur.dataset.stage != null) setBackdrop("", s.color);
+}
+function stagePlay() {
+  if (stage) stage.play(screen === "home" && stageOn() && !S.playing && !document.hidden);
+}
+document.addEventListener("visibilitychange", stagePlay);
+
 function renderHome(focusKey) {
   const games = visibleGames();
+  const useStage = stageOn() && games.length > 0;
+  $("#stage-wrap").hidden = !useStage;
+  $("#sys-title").hidden = useStage;
+  $("#sys-rail").hidden = useStage;
+  if (useStage) {
+    const list = stageSystems();
+    $("#stage-tools").innerHTML = `<button class="pill btn-pill" data-nav data-do="search" data-key="search">⌕ Search</button>`
+      + (S.games.some((g) => g.plays) ? `<button class="pill btn-pill" data-nav data-do="stats" data-key="stats">Stats</button>` : "")
+      + `<button class="pill btn-pill" data-nav data-do="settings" data-key="settings">Settings${S.update && (S.update.available || S.update.ready) ? ' <span class="badge">Update</span>' : ""}</button>`;
+    ensureStage().then((st) => {
+      if (!st) return renderHome(focusKey);
+      const want = stageSys && list.some((s) => s.id === stageSys) ? stageSys : (list[0] || {}).id;
+      st.setList(list, want);
+      stageSys = st.current && st.current.id;
+      stageInfo();
+      stagePlay();
+    });
+    if (!focusKey || focusKey.startsWith("sys:")) focusKey = "stage";
+  }
   $("#sys-rail").innerHTML = `<div class="sys sys-search" data-nav data-do="search" data-key="search"><div class="sys-name">Search</div><div class="sys-count">Every game you have</div></div>`
     + S.systems.filter((s) => games.some((g) => g.system === s.id)).map(sysTile).join("")
     + (S.games.some((g) => g.plays) ? `<div class="sys sys-stats" data-nav data-do="stats" data-key="stats"><div class="sys-name">Stats</div><div class="sys-count">${esc(R.playtime(S.games.reduce((a, g) => a + g.played, 0)).replace(" played", ""))} played</div></div>` : "")
@@ -222,6 +286,7 @@ function showLetter(ch) {
 }
 
 function shelfStep(d) {
+  setTimeout(() => { stageSys = shelfSys; }, 0);
   const ids = visibleSystems();
   if (ids.length < 2) return R.sound("bump");
   const i = ids.indexOf(shelfSys);
@@ -328,6 +393,7 @@ document.addEventListener("relic:focus", (e) => {
     const g = el.dataset.game && S.byId[el.dataset.game];
     if (g) { setBackdrop(art(g, "snap"), R.sysColor(g.system)); slideshow(g); }
     else if (el.dataset.sys) setBackdrop("", R.sysColor(el.dataset.sys));
+    else if (el.dataset.stage != null && stage && stage.current) setBackdrop("", stage.current.color);
     else setBackdrop("", "");
   }, 220);
   if (screen === "shelf") showInfo(el);
@@ -357,7 +423,9 @@ function hints() {
   else if (!$("#game-pop").hidden || setupOpen()) list = [["a", "Select"], ["b", "Close"]];
   else if (screen === "settings") list = [["a", "Select"], ["b", "Back"]];
   else {
+    const onStage = cur && cur.dataset.stage != null;
     list.push(["a", onGame ? "Play" : "Open"]);
+    if (onStage) list.push(["lb+rb", "Turn"]);
     if (onGame) list.push(["x", "Favorite"], ["y", "Options"]);
     if (screen === "shelf") list.push(["lb+rb", "System"], ["lt+rt", "Jump"], ["select", "Sort"], ["b", "Back"]);
     if (screen === "home" && S.games.length) list.push(["select", "Surprise me"]);
@@ -371,6 +439,7 @@ let playPoll = 0;
 function setPlaying(p) {
   const was = S.playing;
   S.playing = p;
+  stagePlay();
   const pill = $("#now-playing");
   pill.hidden = !p;
   if (p) pill.innerHTML = `<span class="dot"></span>Playing ${esc(p.title)}`;
@@ -637,7 +706,9 @@ function openPop(g, surprised = false) {
   $("#pop-title").textContent = g.title;
   const meta = [g.year, g.genre, g.players > 1 ? `${g.players} players` : "", g.developer, g.region, R.playtime(g.played), g.plays ? `${g.plays} session${g.plays === 1 ? "" : "s"}` : "", g.last ? `last played ${R.ago(g.last)}` : ""].filter(Boolean);
   if (s && s.standalone) meta.push(`plays in ${s.standalone}`);
-  $("#pop-meta").innerHTML = meta.map(esc).join(" · ") + `<div class="pop-file">${esc(g.label)}</div>`;
+  $("#pop-meta").innerHTML = meta.map(esc).join(" · ") + `<div class="pop-file">${esc(g.label)}</div>`
+    // screenshot and title screen, when there are any
+    + `<div class="pop-shots">${["snap", "title"].map((k) => `<img alt="" src="${art(g, k)}" onerror="this.remove()">`).join("")}</div>`;
   renderPopActions();
   $("#game-pop").hidden = false;
   updateBack();
@@ -838,6 +909,9 @@ function renderSettings(focusDo) {
        <button class="btn" data-nav data-do="backup-off">Turn off backups</button>`
     : `<p class="hint">Keep your saves safe from a reinstall or a new PC: pick a folder, like one in OneDrive, and Relic backs up after every session.</p>
        <button class="btn" data-nav data-do="backup-folder">Choose a backup folder…</button>`;
+  const hs = S.config.home_style || "stage";
+  $("#home-opts").innerHTML = [["stage", "Stage (3D)"], ["rows", "Tiles"]].map(([v, t]) =>
+    `<button class="btn theme${hs === v ? " on" : ""}" data-nav data-do="home-style" data-v="${v}">${t}</button>`).join("");
   const look = S.config.look || "box";
   $("#look-opts").innerHTML = [["box", "Box art"], ["physical", "Physical"]].map(([v, t]) =>
     `<button class="btn theme${look === v ? " on" : ""}" data-nav data-do="look" data-v="${v}">${t}</button>`).join("");
@@ -1010,6 +1084,12 @@ async function doAction(el) {
       renderSettings('[data-do="backup-folder"]');
       return R.toast("Backups off. Old ones are still in that folder");
     }
+    if (d === "home-style") {
+      await R.setConfig({ home_style: el.dataset.v });
+      if (el.dataset.v === "stage" && stage === false) { stage = null; stageTried = false; }
+      R.toast(el.dataset.v === "stage" ? "Your consoles, on a 3D stage" : "Tiles on the home screen");
+      return renderSettings(`[data-do="home-style"][data-v="${el.dataset.v}"]`);
+    }
     if (d === "look") {
       await R.setConfig({ look: el.dataset.v });
       R.toast(el.dataset.v === "physical" ? "Games now look like their cases and cartridges" : "Plain box art");
@@ -1132,6 +1212,11 @@ R.nav.on((btn) => {
     if (btn === "b") { closeSettings(); return true; }
     return false;
   }
+  if (screen === "home" && cur && cur.dataset.stage != null && stage) {
+    if (btn === "left" || btn === "lb") { stage.step(-1); return true; }
+    if (btn === "right" || btn === "rb") { stage.step(1); return true; }
+    if (btn === "a") { R.sound("select"); lastHomeFocus = "stage"; openShelf(stage.current.id); return true; }
+  }
   if (screen === "stats" && btn === "b") { R.sound("back"); renderHome(lastHomeFocus || "stats"); return true; }
   if (btn === "a") {
     if (g) { launch(g); return true; }
@@ -1141,7 +1226,7 @@ R.nav.on((btn) => {
   if (btn === "x" && g) { toggleFav(g, cur); return true; }
   if (btn === "y" && g) { openPop(g); return true; }
   if (screen === "shelf") {
-    if (btn === "b") { R.sound("back"); renderHome(lastHomeFocus || `sys:${shelfSys}`); return true; }
+    if (btn === "b") { R.sound("back"); if (stageOn()) stageSys = shelfSys; renderHome(lastHomeFocus || `sys:${shelfSys}`); return true; }
     if (btn === "lt" || btn === "rt") { letterJump(btn === "lt" ? -1 : 1); return true; }
     if (btn === "lb") { shelfStep(-1); return true; }
     if (btn === "rb") { shelfStep(1); return true; }
