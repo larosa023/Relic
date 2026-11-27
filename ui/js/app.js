@@ -570,7 +570,7 @@ function findArt(g) {
       if (!q.trim()) return `<p class="hint">Type part of the game's name.</p>`;
       let names = [];
       try { names = (await R.api(`/api/art/search?id=${g.id}&q=${encodeURIComponent(q)}`)).names; } catch (e) {}
-      if (!names.length) return `<p class="hint">No ${esc(s.name || "")} games called “${esc(q)}” in libretro's list. Try fewer words.</p>`;
+      if (!names.length) return `<p class="hint">No ${esc(s.name || "")} games called “${esc(q)}” in libretro's list. Try the full title, or just one word of it.</p>`;
       return `<div class="rail cards">${names.map((n) => `<button class="card pick" data-nav data-pick="${esc(n)}" style="--sys:${R.sysColor(g.system)};--ar:${R.boxRatio(g.system)}">
         <div class="cover"><div class="ph" style="--sys:${R.sysColor(g.system)}"><span class="ph-title">${esc(n)}</span></div>
         <img loading="lazy" alt="" src="/art/preview?id=${g.id}&name=${encodeURIComponent(n)}" onload="this.parentNode.classList.add('has-art')" onerror="this.parentNode.classList.add('no-art')"></div>

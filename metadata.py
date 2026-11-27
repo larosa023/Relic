@@ -139,6 +139,54 @@ STOP = {"the", "a", "an", "of", "and", "edition", "version", "game"}
 TOKEN = re.compile(r"[a-z0-9]+")
 
 
+LOOSE_PREFIXES = {
+    "PlayStation": ("SLUS", "SCUS", "SLES", "SCES", "SLPS", "SCPS", "SLPM", "SCPM"),
+    "PlayStation 2": ("SLUS", "SCUS", "SLES", "SCES", "SLPS", "SLPM", "SCPS", "SCAJ", "SLKA"),
+    "PlayStation Portable": ("ULUS", "UCUS", "ULES", "UCES", "ULJM", "ULJS", "UCJS", "NPUH", "NPUG"),
+}
+
+# Short names people type, and what the database calls them.
+ALIASES = {
+    "gta": "grand theft auto", "sa": "san andreas", "vc": "vice city", "lcs": "liberty city stories",
+    "vcs": "vice city stories", "ff": "final fantasy", "mgs": "metal gear solid", "kh": "kingdom hearts",
+    "gt": "gran turismo", "nfs": "need for speed", "mw": "most wanted", "re": "resident evil",
+    "sf": "street fighter", "mk": "mortal kombat", "thps": "tony hawk s pro skater", "cod": "call of duty",
+    "dbz": "dragon ball z", "tmnt": "teenage mutant ninja turtles", "loz": "legend of zelda",
+    "zelda": "zelda", "smb": "super mario bros", "ctr": "crash team racing", "dmc": "devil may cry",
+    "sotc": "shadow of the colossus", "rdr": "red dead revolver", "jak": "jak", "ratchet": "ratchet",
+    "pes": "pro evolution soccer", "we": "winning eleven", "bf": "battlefront", "sw": "star wars",
+    "ac": "armored core", "dq": "dragon quest", "smt": "shin megami tensei", "mvc": "marvel vs capcom",
+    "tlou": "last of us", "gow": "god of war", "kotor": "knights of the old republic",
+}
+ROMAN = {"1": "i", "2": "ii", "3": "iii", "4": "iv", "5": "v", "6": "vi", "7": "vii", "8": "viii", "9": "ix", "10": "x"}
+ROMAN.update({v: k for k, v in list(ROMAN.items())})
+
+
+def _words(name: str) -> list[str]:
+    return TOKEN.findall(TAGS.sub("", name).lower())
+
+
+def _word_hits(word: str, words: list[str], low: str) -> bool:
+    """Whether one typed word is in a name: as written, as its usual long form ("gta"), as a
+    number written the other way ("2"/"ii"), or as the first letters of words in a row ("gta",
+    "mgs")."""
+    if len(word) >= 3 and word in low:
+        return True
+    if word in words:
+        return True
+    alt = ROMAN.get(word)
+    if alt and alt in words:
+        return True
+    long = ALIASES.get(word)
+    if long and f" {long} " in f" {' '.join(words)} ":
+        return True
+    if 2 <= len(word) <= 6 and word.isalpha():
+        firsts = "".join(w[0] for w in words)
+        if word in firsts and any(firsts[i:i + len(word)] == word for i in range(len(firsts))):
+            return True
+    return False
+
+
 def _tokens(name: str) -> frozenset:
     return frozenset(t for t in TOKEN.findall(TAGS.sub("", name).lower()) if t not in STOP)
 
@@ -191,6 +239,12 @@ class Metadata:
             hit = idx["serials"].get("ID4:" + serial[:4])
             if hit:
                 return hit
+        if serial.startswith("~"):  # just the number: try the usual prefixes, North America first
+            for pre in LOOSE_PREFIXES.get(db.split(" - ")[-1], ()):
+                hit = idx["serials"].get(pre + serial[1:])
+                if hit:
+                    return hit
+            return ""
         return idx["serials"].get(serial, "")
 
     def variants(self, db: str, name: str, limit: int = 6) -> list[str]:
@@ -252,18 +306,27 @@ class Metadata:
         return name
 
     def search(self, db: str, query: str, limit: int = 30) -> list[str]:
-        """Names containing every word you typed (for choosing box art by hand)."""
-        words = [w for w in TOKEN.findall(query.lower()) if w]
-        if not words:
+        """Names matching what you typed (for choosing box art by hand). Every word must match;
+        if nothing does, the names matching the most words are shown instead."""
+        q = [w for w in TOKEN.findall(query.lower()) if w not in STOP]
+        if not q:
             return []
-        out = []
+        scored = []
         for n in self.names(db):
-            low = n.lower()
-            if all(w in low for w in words):
-                out.append(n)
-                if len(out) >= 400:
-                    break
-        out.sort(key=lambda n: (not n.lower().startswith(words[0]), "(USA" not in n, len(n)))
+            words = _words(n)
+            if not words:
+                continue
+            low = " ".join(words)
+            hits = sum(_word_hits(w, words, low) for w in q)
+            if hits:
+                scored.append((hits, n))
+        if not scored:
+            return []
+        best = max(h for h, _ in scored)
+        if best < len(q) and best < max(1, len(q) // 2):
+            return []
+        out = [n for h, n in scored if h == best]
+        out.sort(key=lambda n: (bool(ODD.search(n)), "(USA" not in n, len(n)))
         return out[:limit]
 
     def _path(self, db: str) -> Path:

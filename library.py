@@ -19,7 +19,7 @@ from reliclog import log
 TAGS = re.compile(r"\s*[\(\[][^\)\]]*[\)\]]")
 REGION = re.compile(r"\((USA|Europe|Japan|World|USA, Europe|Japan, USA|Korea|Brazil|Australia|France|Germany|Spain|Italy|En,[^)]*)\)", re.I)
 DISC = re.compile(r"\((Disc|Disk|CD)\s*(\d+)[^)]*\)", re.I)
-CACHE_FORMAT = 3
+CACHE_FORMAT = 4
 SKIP_DIRS = {"bios", "system", "saves", "states", "screenshots", "thumbnails", "media", "images", "manuals"}
 
 
@@ -302,7 +302,7 @@ class Library:
         if s.id in disc_id.DISC_SYSTEMS:
             # The disc's own ID, read once and remembered while the file is unchanged.
             old = self._games_by_path.get(path)
-            serial = old.get("serial", "") if old and old.get("sig") == sig and "serial" in old else disc_id.read(path, s.id)
+            serial = old.get("serial", "") if old and old.get("sig") == sig and "serial" in old else disc_id.read_any(path, s.id)
         seen[gid] = {
             "id": gid,
             "title": title,

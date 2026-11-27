@@ -29,6 +29,18 @@ def from_name(name: str) -> str:
     return norm(m[1] + m[2] + m[3]) if m else ""
 
 
+LOOSE_ID = re.compile(r"(?:\b[A-Z]{4}[-_ ]?|(?<![\d.]))(\d{3})\.(\d{2})(?![\d])|\b[A-Z]{4}[-_ ]?(\d{3})(\d{2})\b", re.I)
+
+
+def loose_from_name(name: str) -> str:
+    """A disc number written without its proper prefix ("SADE 209.46" -> "~20946"); the database
+    is asked which release it is."""
+    m = LOOSE_ID.search(name)
+    if not m:
+        return ""
+    return "~" + ((m[1] + m[2]) if m[1] else (m[3] + m[4]))
+
+
 class _Iso:
     """Just enough ISO 9660 to find a file in the root folder. Handles plain 2048-byte images
     and raw 2352-byte CD images (PlayStation .bin)."""
@@ -151,8 +163,16 @@ def read(path: str, system: str) -> str:
             with open(p, "rb") as f:
                 return _nintendo(f)
     except (OSError, ValueError, struct.error):
-        return ""
+        pass
     return ""
+
+
+def read_any(path: str, system: str) -> str:
+    """read(), then a number in the file name that looks like a disc ID."""
+    s = read(path, system)
+    if not s and system in ("psx", "ps2", "psp"):
+        s = loose_from_name(Path(path).stem)
+    return s
 
 
 DISC_SYSTEMS = {"psx", "ps2", "psp", "gamecube", "wii"}
