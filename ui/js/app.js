@@ -39,7 +39,8 @@ function applyTheme(id) {
 
 // ---------- pieces ----------
 const visibleGames = () => S.games.filter((g) => !g.hidden);
-const art = (g, kind = "boxart") => `/art/${g.id}/${kind}`;
+// ?v= changes when Relic learns a game's real name, so newly found art shows up straight away.
+const art = (g, kind = "boxart") => `/art/${g.id}/${kind}${g.artv ? `?v=${g.artv}` : ""}`;
 
 function placeholder(g) {
   const s = S.sysById[g.system];
@@ -512,8 +513,15 @@ function kbType(k) {
   R.sound("move");
   kbLive();
 }
+let kbTimer = 0;
 function kbLive() {
   const box = $("#kb-results");
+  if (kb && kb.liveAsync) {  // results from Relic (box art search): wait for a pause in typing
+    clearTimeout(kbTimer);
+    const q = $("#kb-input").value, k = kb;
+    kbTimer = setTimeout(async () => { const html = await k.liveAsync(q); if (kb === k && $("#kb-input").value === q) box.innerHTML = html; }, 250);
+    return;
+  }
   box.innerHTML = kb && kb.live ? kb.live($("#kb-input").value) : "";
 }
 function kbDone() {
@@ -536,6 +544,7 @@ function kbButton(btn) {
   if (btn === "y") { kbType(" "); return true; }
   if (btn === "start") { kbDone(); return true; }
   if (btn === "a" && cur && cur.dataset.k != null) { kbType(cur.dataset.k); return true; }
+  if (btn === "a" && cur && cur.dataset.pick != null) { kb.onPick(cur.dataset.pick); return true; }
   if (btn === "a" && cur && cur.dataset.game) { const g = S.byId[cur.dataset.game]; closeKeyboard(); launch(g); return true; }
   return false;
 }
@@ -546,7 +555,40 @@ $("#kb-input").addEventListener("keydown", (e) => {
   else if (e.key === "ArrowDown") { e.preventDefault(); $("#kb-input").blur(); R.nav.focus($("#kb-results [data-nav]") || $("#kb-keys [data-nav]")); }
 });
 $("#kb-pop").addEventListener("mousedown", (e) => { if (e.target.id === "kb-pop") closeKeyboard(); });
-$("#kb-results").addEventListener("click", (e) => { if (e.target.closest("[data-game]")) setTimeout(closeKeyboard, 0); }, true);
+$("#kb-results").addEventListener("click", (e) => {
+  const pick = e.target.closest("[data-pick]");
+  if (pick && kb && kb.onPick) { e.stopPropagation(); return kb.onPick(pick.dataset.pick); }
+  if (e.target.closest("[data-game]")) setTimeout(closeKeyboard, 0);
+}, true);
+
+// ---------- choosing box art by hand ----------
+function findArt(g) {
+  const s = S.sysById[g.system] || {};
+  openKeyboard({
+    title: `Box art for ${g.title}`, value: g.title.replace(/[^\w\s'&-]+/g, " ").trim(),
+    liveAsync: async (q) => {
+      if (!q.trim()) return `<p class="hint">Type part of the game's name.</p>`;
+      let names = [];
+      try { names = (await R.api(`/api/art/search?id=${g.id}&q=${encodeURIComponent(q)}`)).names; } catch (e) {}
+      if (!names.length) return `<p class="hint">No ${esc(s.name || "")} games called “${esc(q)}” in libretro's list. Try fewer words.</p>`;
+      return `<div class="rail cards">${names.map((n) => `<button class="card pick" data-nav data-pick="${esc(n)}" style="--sys:${R.sysColor(g.system)};--ar:${R.boxRatio(g.system)}">
+        <div class="cover"><div class="ph" style="--sys:${R.sysColor(g.system)}"><span class="ph-title">${esc(n)}</span></div>
+        <img loading="lazy" alt="" src="/art/preview?id=${g.id}&name=${encodeURIComponent(n)}" onload="this.parentNode.classList.add('has-art')" onerror="this.parentNode.classList.add('no-art')"></div>
+        <div class="cap">${esc(n)}</div></button>`).join("")}</div>`;
+    },
+    onPick: async (name) => {
+      try {
+        await R.api("/api/art/choose", { id: g.id, name });
+      } catch (e) { return R.toast(e.message, true); }
+      closeKeyboard();
+      const v = Date.now();
+      for (const img of $$(`[data-game="${g.id}"] img, #pop-art img`)) { img.src = `/art/${g.id}/boxart?v=${v}`; img.parentNode.classList.add("has-art"); }
+      R.sound("fav");
+      R.toast("Box art set");
+    },
+    onDone: () => {},
+  });
+}
 $("#kb-keys").addEventListener("click", (e) => { const k = e.target.closest("[data-k]"); if (k) { kbType(k.dataset.k); if (!R.nav.usingPad) $("#kb-input").focus(); } });
 
 // ---------- search ----------
@@ -740,6 +782,7 @@ function renderPopActions(focusDo) {
     ...(g.core && g.core !== (S.config.system_cores || {})[g.system] ? [["core-all", `Use this core for every ${(S.sysById[g.system] || {}).name || ""} game`]] : []),
     ...(popSurprise ? [["again", "↻  Surprise me again"]] : []),
     ["collect", "＋  Add to a collection…"],
+    ["findart", "Find box art…"],
     ...((S.config.collections || []).filter((c) => c.games.includes(g.id)).map((c) => [`uncollect-${c.id}`, `−  Remove from ${c.name}`])),
     ...(S.native ? [["art", "Set box art…"]] : []),
     ["hide", "Hide this game"],
@@ -1034,6 +1077,7 @@ async function doAction(el) {
     if (d === "filter-genre") return cycleFilter("genre");
     if (d === "pop-fresh") { const g = popGame; closePop(); return launch(g, true); }
     if (d === "pop-collect") return chooseCollection(popGame);
+    if (d === "pop-findart") return findArt(popGame);
     if (d && d.startsWith("pop-uncollect-")) {
       const r = await R.api("/api/collections", { action: "remove", cid: d.slice(14), game: popGame.id });
       S.config.collections = r.collections;

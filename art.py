@@ -10,6 +10,7 @@ Looked for in this order, and cached in %APPDATA%\\Relic\\art:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -24,12 +25,19 @@ from version import VERSION
 
 KINDS = {"boxart": "Named_Boxarts", "snap": "Named_Snaps", "title": "Named_Titles"}
 SERVER = "https://thumbnails.libretro.com"
+GITHUB_THUMBS = "https://raw.githubusercontent.com/libretro-thumbnails"
 BAD = re.compile(r'[&*/:`<>?\\|"]')
 TAGS = re.compile(r"\s*[\(\[][^\)\]]*[\)\]]")
 LISTING = re.compile(r'href="([^"]+\.png)"', re.I)
 MISS_DAYS = 3
 INDEX_DAYS = 14
 PREFERRED_REGIONS = ("USA", "World", "Europe", "Japan")
+
+
+def _plain(name: str) -> str:
+    """"Game (USA, Canada) (v3.00)" -> "Game (USA, Canada)": the name with its region only."""
+    m = re.match(r"^(.*?\([^)]*\))", name)
+    return m[1] if m and m[1] != name else ""
 
 
 def thumb_name(label: str) -> str:
@@ -67,6 +75,7 @@ class Art:
         self._index: dict[str, dict[str, list[str]]] = {}
         self._index_locks: dict[str, threading.Lock] = {}
         self._local_idx: dict[str, dict[str, str]] = {}
+        self.variants = None  # (db, name) -> other releases of a game, from libretro's database
 
     # ------------------------------------------------------------- public
     def find(self, game: dict, db: str, kind: str = "boxart") -> Path | None:
@@ -79,16 +88,26 @@ class Art:
         cached = self.dir / f"{game['id']}_{kind}.png"
         if cached.is_file():
             return cached
-        local = self._local(game["label"], db, kind)
-        if local:
-            return local
-        miss_key = f"{game['id']}_{kind}"
+        # The official name when Relic knows it (from the disc's ID, or the closest name in libretro's
+        # database), then the name from the file.
+        official = game.get("official") or ""
+        others = self.variants(db, official) if official and self.variants else []
+        labels = [x for x in dict.fromkeys([official, *others, _plain(official), game["label"]]) if x]
+        for label in labels:
+            local = self._local(label, db, kind)
+            if local:
+                return local
+        miss_key = f"{game['id']}_{kind}_{_key(labels[0])[:24]}"  # a new name gets a fresh try
         if not self.config["download_art"] or time.time() - self._misses.get(miss_key, 0) < MISS_DAYS * 86400:
             return None
         with self._net:
             if cached.is_file():  # another request got it while this one waited
                 return cached
-            data = self._download(game["label"], db, kind)
+            data = None
+            for label in labels:
+                data = self._download(label, db, kind)
+                if data:
+                    break
         if data:
             tmp = cached.with_suffix(".tmp")
             tmp.write_bytes(data)
@@ -101,6 +120,19 @@ class Art:
             except OSError:
                 pass
         return None
+
+    def preview(self, name: str, db: str) -> Path | None:
+        """A box art picture by its libretro name, downloaded once and kept."""
+        h = hashlib.sha1(f"{db}|{name}".encode()).hexdigest()[:20]
+        p = self.dir / "_preview" / f"{h}.png"
+        if p.is_file():
+            return p
+        data = self.fetch(name, db, "boxart")
+        if not data:
+            return None
+        p.parent.mkdir(exist_ok=True)
+        p.write_bytes(data)
+        return p
 
     def set_custom(self, gid: str, kind: str, data: bytes, ext: str) -> None:
         for old in self.custom.glob(f"{gid}_{kind}.*"):
@@ -137,20 +169,31 @@ class Art:
         hit = idx.get(_key(label))
         return Path(hit) if hit else None
 
-    def _download(self, label: str, db: str, kind: str) -> bytes | None:
-        base = f"{SERVER}/{urllib.parse.quote(db)}/{KINDS[kind]}/"
-        names = [thumb_name(label)]
-        loose = self._loose(label, db, kind)
-        if loose and loose not in names:
-            names.append(loose)
-        for name in names:
+    def fetch(self, name: str, db: str, kind: str = "boxart") -> bytes | None:
+        """One picture by its exact libretro name: the thumbnail server, then libretro's thumbnail
+        collection on GitHub (the same pictures, a second place to get them)."""
+        q = urllib.parse.quote(thumb_name(name)) + ".png"
+        for url in (f"{SERVER}/{urllib.parse.quote(db)}/{KINDS[kind]}/{q}",
+                    f"{GITHUB_THUMBS}/{urllib.parse.quote(db.replace(' ', '_'))}/master/{KINDS[kind]}/{q}"):
             try:
-                data = _get(base + urllib.parse.quote(name) + ".png")
+                data = _get(url)
                 if data[:8] == b"\x89PNG\r\n\x1a\n":
                     return data
             except Exception as e:
                 if "404" not in str(e):
-                    log.info("art %s/%s: %s", db, name, e)
+                    log.info("art %s: %s", url.split("/", 3)[2], e)
+        return None
+
+    def _download(self, label: str, db: str, kind: str) -> bytes | None:
+        names = [label]
+        if "(" not in label:  # an official name (with its region) needs no guessing
+            loose = self._loose(label, db, kind)
+            if loose and loose not in names:
+                names.append(loose)
+        for name in names:
+            data = self.fetch(name, db, kind)
+            if data:
+                return data
         return None
 
     def _loose(self, label: str, db: str, kind: str) -> str | None:

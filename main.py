@@ -233,12 +233,15 @@ def main() -> None:
     details = Metadata(ddir, ra, on_change=library.bump)
 
     def fetch_details():
-        if cfg["game_details"]:
+        if cfg["game_details"] or cfg["download_art"]:  # the database also names games for their box art
             dbs = sorted({library.system(g["system"]).db for g in library.games() if library.system(g["system"])})
             details.fetch_async(dbs, allow_download=True)
     library.after_scan.append(fetch_details)
+    library.namer = details.official
     threading.Thread(target=lambda: (library.games(), fetch_details()), daemon=True).start()
-    ctx = Context(token=secrets.token_urlsafe(24), ra=ra, library=library, art=Art(ddir, ra, cfg),
+    art = Art(ddir, ra, cfg)
+    art.variants = details.variants
+    ctx = Context(token=secrets.token_urlsafe(24), ra=ra, library=library, art=art,
                   config=cfg, meta=meta, sessions=sessions, player=player,
                   ui_dir=res / "ui", theme_dirs=[res / "themes", ddir / "themes"], data_dir=ddir,
                   window_api=window_api, updater=updater, restart=restart, activate=lambda: show_window(),

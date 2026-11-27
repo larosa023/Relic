@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import mimetypes
 import os
@@ -12,6 +13,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 import art as artmod
+from library import clean_title
 
 # Windows can map .js to text/plain from the registry, which stops module scripts loading.
 mimetypes.add_type("text/javascript", ".js")
@@ -21,6 +23,13 @@ from reliclog import log
 from version import VERSION
 
 THEME_META = re.compile(r"@(\w+)\s+([^\n*]+)")
+
+
+def _differs(title: str, official: str) -> bool:
+    """True when a file's title has little in common with the official name."""
+    from metadata import _tokens
+    a, b = _tokens(title), _tokens(official)
+    return not a or len(a & b) / len(a | b) < 0.8
 
 
 def _public_config(cfg) -> dict:
@@ -147,11 +156,18 @@ class Handler(BaseHTTPRequestHandler):
                 if p:
                     return self._file(p, "no-cache")
             return self._send(404, b"", "text/css")
+        if path == "/art/preview":  # one picture from libretro by name, for choosing box art by hand
+            q = parse_qs(parts.query)
+            g = c.library.get((q.get("id") or [""])[0])
+            name = (q.get("name") or [""])[0][:200]
+            s = g and c.library.system(g["system"])
+            p = c.art.preview(name, s.db) if s and name else None
+            return self._file(p, "max-age=604800") if p else self._send(404, b"", "text/plain", "max-age=300")
         m = re.fullmatch(r"/art/([0-9a-f]{12})/(\w+)", path)
         if m:
             g = c.library.get(m[1])
             s = g and c.library.system(g["system"])
-            p = c.art.find(g, s.db, m[2]) if g and s else None
+            p = c.art.find(dict(g, official=c.library.official(g)), s.db, m[2]) if g and s else None
             return self._file(p, "max-age=604800") if p else self._send(404, b"", "text/plain", "max-age=300")
 
         if not path.startswith("/api/"):
@@ -167,6 +183,13 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/stats":
             import backup
             return self._json(backup.stats(list(c.sessions.data), c.library))
+        if path == "/api/art/search":
+            q = parse_qs(parts.query)
+            g = c.library.get((q.get("id") or [""])[0])
+            s = g and c.library.system(g["system"])
+            if not s:
+                return self._json({"ok": False, "error": "No such game"}, 404)
+            return self._json({"ok": True, "names": c.details.search(s.db, (q.get("q") or [""])[0]) if c.details else []})
         if path == "/api/library":
             q = parse_qs(parts.query)
             if "rev" in q:  # wait for the background rescan to change something
@@ -224,8 +247,17 @@ class Handler(BaseHTTPRequestHandler):
             m = c.meta.get(g["id"])
             t = totals.get(g["id"], {})
             s = c.library.system(g["system"])
-            info = c.details.get(s.db, g["label"]) if details and s else {}
-            out.append({k: g[k] for k in ("id", "title", "label", "sort", "system", "region", "source")} | {
+            official = c.library.official(g)
+            info = c.details.get(s.db, official or g["label"]) if details and s else {}
+            title, sort = g["title"], g["sort"]
+            if official and g.get("serial") and _differs(g["title"], official):
+                # The disc says what it is and the file name doesn't ("SADE 209.46.GTA SA..."): use the real name.
+                title = clean_title(official)
+                sort = re.sub(r"^(the|a|an)\s+", "", title.lower())
+            out.append({k: g[k] for k in ("id", "label", "system", "region", "source")} | {
+                "title": title, "sort": sort,
+                "artv": hashlib.sha1(official.encode()).hexdigest()[:6] if official else "",
+                "serial": g.get("serial", ""),
                 "added": g.get("added", 0),
                 "favorite": bool(m.get("favorite")),
                 "hidden": bool(m.get("hidden")),
@@ -284,6 +316,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self._collections(body)
             if path == "/api/backup":
                 return self._backup(body)
+            if path == "/api/art/choose":
+                g = c.library.get(str(body.get("id", "")))
+                s = g and c.library.system(g["system"])
+                name = str(body.get("name", ""))[:200]
+                p = c.art.preview(name, s.db) if s and name else None
+                if not p:
+                    raise RuntimeError("Couldn't get that picture. Check your connection and try again.")
+                c.art.set_custom(g["id"], "boxart", p.read_bytes(), ".png")
+                return self._json({"ok": True})
             if path == "/api/customart":
                 return self._custom_art(body)
             if path == "/api/activate":  # a second copy of Relic was opened: show this one

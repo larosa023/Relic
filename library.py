@@ -10,6 +10,7 @@ import threading
 import time
 from pathlib import Path
 
+import disc_id
 import standalone
 import systems
 from systems import System
@@ -18,7 +19,7 @@ from reliclog import log
 TAGS = re.compile(r"\s*[\(\[][^\)\]]*[\)\]]")
 REGION = re.compile(r"\((USA|Europe|Japan|World|USA, Europe|Japan, USA|Korea|Brazil|Australia|France|Germany|Spain|Italy|En,[^)]*)\)", re.I)
 DISC = re.compile(r"\((Disc|Disk|CD)\s*(\d+)[^)]*\)", re.I)
-CACHE_FORMAT = 2
+CACHE_FORMAT = 3
 SKIP_DIRS = {"bios", "system", "saves", "states", "screenshots", "thumbnails", "media", "images", "manuals"}
 
 
@@ -93,7 +94,9 @@ class Library:
         self.rev = 0                         # goes up whenever the library changes
         self._changed = threading.Condition()
         self.scanned_at = 0.0
-        self.after_scan: list = []  # run after every scan (game details, BIOS checks)
+        self.after_scan: list = []
+        self.namer = None  # (db, game) -> official name; set when game details are on
+        self._games_by_path: dict = {}  # run after every scan (game details, BIOS checks)
         self.on_refresh: list = []
 
     # ------------------------------------------------------------- loading
@@ -255,7 +258,15 @@ class Library:
         return ""
 
     # ------------------------------------------------------------- building
+    def official(self, g: dict) -> str:
+        """The game's name in libretro's database (by disc ID, else closest name), or ""."""
+        if not self.namer:
+            return ""
+        s = self._systems.get(g["system"])
+        return self.namer(s.db, g) if s else ""
+
     def _build(self, cores: dict) -> list[dict]:
+        self._games_by_path = {g["path"]: g for g in (self._games or [])}
         seen: dict[str, dict] = {}
         hidden_pl = set(self.config["hidden_playlists"] or [])
         for name, items in self.ra.playlists():
@@ -283,9 +294,15 @@ class Library:
         title = clean_title(label)
         region = REGION.search(label)
         try:
-            added = int(os.stat(path.rsplit("#", 1)[0] if "#" in path and not os.path.exists(path) else path).st_mtime)
+            st = os.stat(path.rsplit("#", 1)[0] if "#" in path and not os.path.exists(path) else path)
+            added, sig = int(st.st_mtime), f"{st.st_size}:{int(st.st_mtime)}"
         except OSError:
-            added = 0
+            added, sig = 0, ""
+        serial = ""
+        if s.id in disc_id.DISC_SYSTEMS:
+            # The disc's own ID, read once and remembered while the file is unchanged.
+            old = self._games_by_path.get(path)
+            serial = old.get("serial", "") if old and old.get("sig") == sig and "serial" in old else disc_id.read(path, s.id)
         seen[gid] = {
             "id": gid,
             "title": title,
@@ -297,6 +314,8 @@ class Library:
             "region": region[1] if region else "",
             "source": source,
             "added": added,
+            "sig": sig,
+            "serial": serial,
         }
 
     def _scan_root(self, seen, root: Path):

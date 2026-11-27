@@ -281,6 +281,8 @@ body.native:not(.win-max):not(.fullscreen):not(.framed) { box-shadow: inset 0 0 
 .pop { max-height: 90vh; }
 .pop-body { overflow-y: auto; scrollbar-width: none; }
 
+.card.pick { border: 0; background: none; padding: 0; text-align: left; color: inherit; font: inherit; }
+.card.pick .cover.no-art { opacity: .45; }
 .pop-shots { display: flex; gap: .6em; margin-top: .9em; }
 .pop-shots img { height: calc(var(--u) * 6); border-radius: calc(var(--radius) * .6); box-shadow: 0 4px 14px rgba(0,0,0,.4); }
 .pop-shots:empty { display: none; }

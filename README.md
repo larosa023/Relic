@@ -12,7 +12,9 @@ Relic reads what RetroArch already knows (its playlists, cores and thumbnails) a
 - **Fast with big libraries**: the library is kept on disk, so Relic opens instantly and rescans quietly in the background, updating the screen if something changed. Shelves with thousands of games open in a blink, and moving stays instant.
 - **Find games quickly**: **LT/RT** (Page Up/Down) jump a shelf by letter. **Select** at home is *Surprise me*, a random pick nudged toward games you haven't played much. A *Recently added* row shows new games.
 - **Box art shelves**: each system gets a shelf of covers shaped like that system's boxes, with the focused game's screenshot blurred behind.
-- **Box art from**: your own picture, RetroArch's thumbnails folder, or the libretro thumbnails server. It matches loosely, so `Super Mario World.sfc` still finds `Super Mario World (USA)`. Art is cached in `%APPDATA%\Relic\art`.
+- **Box art from**: your own picture, RetroArch's thumbnails folder, or libretro's thumbnails (from their server, with GitHub as a second source). It matches loosely, so `Super Mario World.sfc` still finds `Super Mario World (USA)`. Art is cached in `%APPDATA%\Relic\art`.
+- **Games identified by their disc**: for PlayStation, PS2, PSP, GameCube and Wii, Relic reads the game's ID from inside the ISO, BIN or RVZ (the same ID the console uses) and looks up its proper name in libretro's database, so `SADE 209.46.iso` shows as Grand Theft Auto: San Andreas with the right cover. If the exact release has no picture, other releases of the same game are tried.
+- **Find box art…** (Y on a game): search libretro's covers by name and pick the right one with a preview.
 - **67 systems**: every console, handheld and computer RetroArch runs well: Nintendo (NES and Famicom Disk System through Wii, 3DS, Game & Watch, Pokémon Mini), Sega (SG-1000 through Dreamcast and NAOMI), Sony (PS1, PS2, PSP), NEC, Atari (2600 to Jaguar and ST), SNK, 3DO, CD-i, ColecoVision, Intellivision, Vectrex and more, plus computers (C64, Amiga, MSX, ZX Spectrum, Amstrad, PC-98, X68000, DOS), ScummVM, PICO-8, TIC-80 and arcade. Folder names are matched loosely: `PS2 Games`, `Sony PlayStation 2 ISOs`, `Game Boy Advance (USA)` and `Nintendo/SNES` all work.
 - **Newer consoles too**: PS4 (shadPS4), PS3 (RPCS3), Switch (Ryujinx), Wii U (Cemu), Xbox (xemu) and Xbox 360 (Xenia) run in their own emulators. Relic finds them in Program Files, AppData, Downloads, Desktop, Documents or an `Emulators` folder, or you choose the `.exe` in **Settings → Other emulators**. PS4 and PS3 games are read as game folders (with their real names from `param.sfo`). Xbox 360 `default.xex` and Wii U `code/*.rpx` games take their folder's name.
 - **Library from**: every RetroArch playlist, plus any ROM folders you add. Name subfolders after the system (`SNES`, `Genesis`, `PS1`…) or keep one mixed folder (Relic sorts by file type). Multi-disc games with a `.m3u` show once.
@@ -57,6 +59,7 @@ Options: `--windowed` starts in a window, and `--browser` runs it in your web br
 | `systems.py` | the consoles Relic knows, their file types, folder names and preferred cores |
 | `library.py` | builds the library from playlists and ROM folders |
 | `art.py` | box art, screenshots and title screens |
+| `disc_id.py` | reads a disc image's game ID (PS1/PS2/PSP/GameCube/Wii) |
 | `updater.py`, `install.py` | checking GitHub releases, downloading and swapping in updates, shortcuts |
 | `setup_wizard.py`, `standalone.py` | downloading RetroArch, cores and emulators; BIOS checks; launching standalone emulators |
 | `extras.py`, `metadata.py` | per-launch RetroArch settings (quit combo, resume, achievements, CRT), BIOS import, game details |
