@@ -29,6 +29,7 @@ DEFAULTS = {
     "quit_combo": True,         # Select + Start closes the game and you're back in Relic
     "home_style": "stage",      # stage (3D consoles) | rows (tiles)
     "look": "box",              # box | physical: covers as plain box art, or as each console's case/cartridge
+    "backdrop": "bold",         # subtle | normal | bold: how strongly the focused game shows behind the shelf
     "crt": "off",               # off | retro | all: RetroArch's CRT shader
     "game_details": True,       # download year/genre/players from libretro's game database
     "retroachievements": {},    # {"user", "token", "hardcore"}: never the password

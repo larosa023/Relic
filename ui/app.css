@@ -24,14 +24,20 @@ button { font: inherit; color: inherit; }
 #backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
 /* Drawn at a quarter of the screen and scaled up: the blur costs a sixteenth as much and looks the same. */
 .bd-img { position: absolute; left: -2%; top: -2%; width: 26%; height: 26%; background: center/cover no-repeat;
-  filter: blur(7px) saturate(1.25) brightness(.55); opacity: 0; transition: opacity .7s ease;
+  filter: blur(var(--bd-blur)) saturate(var(--bd-sat)) brightness(var(--bd-bright)); opacity: 0; transition: opacity .7s ease;
   transform: scale(4.15); transform-origin: 0 0; will-change: opacity; }
-.bd-img.on { opacity: .85; }
+.bd-img.on { opacity: var(--bd-op); }
 .bd-shade { position: absolute; inset: 0;
   background:
     radial-gradient(ellipse 70% 55% at 75% 10%, color-mix(in srgb, var(--focus-sys) 22%, transparent), transparent 70%),
-    linear-gradient(180deg, color-mix(in srgb, var(--bg) 35%, transparent) 0%, color-mix(in srgb, var(--bg) 70%, transparent) 45%, var(--bg) 100%);
+    radial-gradient(ellipse 120% 90% at 50% 40%, transparent 40%, color-mix(in srgb, var(--bg) 55%, transparent) 100%),
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) var(--bd-top), transparent) 0%,
+      color-mix(in srgb, var(--bg) var(--bd-mid), transparent) 50%, color-mix(in srgb, var(--bg) var(--bd-low), transparent) 100%);
   transition: background .6s ease; }
+/* How strongly the focused game shows (Settings -> Background). */
+:root, :root[data-bd="bold"] { --bd-blur: 5px; --bd-sat: 1.45; --bd-bright: .85; --bd-op: 1; --bd-top: 10%; --bd-mid: 38%; --bd-low: 88%; }
+:root[data-bd="normal"] { --bd-blur: 6px; --bd-sat: 1.3; --bd-bright: .7; --bd-op: .95; --bd-top: 25%; --bd-mid: 55%; --bd-low: 96%; }
+:root[data-bd="subtle"] { --bd-blur: 7px; --bd-sat: 1.25; --bd-bright: .55; --bd-op: .85; --bd-top: 35%; --bd-mid: 70%; --bd-low: 100%; }
 
 /* ---------- top bar ---------- */
 #top { position: relative; z-index: 3; display: flex; align-items: center; gap: calc(var(--u) * 1.2);

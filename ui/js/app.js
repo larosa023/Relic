@@ -14,6 +14,7 @@ const SORT_LABEL = { title: "A–Z", recent: "Recently played", played: "Most pl
 async function loadState() {
   const st = await R.api("/api/state");
   S.backup = st.backup;
+  document.documentElement.dataset.bd = (st.config && st.config.backdrop) || "bold";
   S.config = st.config; S.themes = st.themes; S.emulators = st.emulators || []; S.ra = st.retroarch; S.native = st.native; S.version = st.version;
   setPlaying(st.playing);
   applyTheme(S.config.theme);
@@ -964,6 +965,9 @@ function renderSettings(focusDo) {
   const look = S.config.look || "box";
   $("#look-opts").innerHTML = [["box", "Box art"], ["physical", "Physical"]].map(([v, t]) =>
     `<button class="btn theme${look === v ? " on" : ""}" data-nav data-do="look" data-v="${v}">${t}</button>`).join("");
+  const bd = S.config.backdrop || "bold";
+  $("#bd-opts").innerHTML = [["subtle", "Subtle"], ["normal", "Normal"], ["bold", "Bold"]].map(([v, t]) =>
+    `<button class="btn theme${bd === v ? " on" : ""}" data-nav data-do="bd" data-v="${v}">${t}</button>`).join("");
   const crt = S.config.crt || "off";
   $("#crt-opts").innerHTML = [["off", "Off"], ["retro", "Retro consoles"], ["all", "Everything"]].map(([v, t]) =>
     `<button class="btn theme${crt === v ? " on" : ""}" data-nav data-do="crt" data-v="${v}">${t}</button>`).join("");
@@ -1144,6 +1148,11 @@ async function doAction(el) {
       await R.setConfig({ look: el.dataset.v });
       R.toast(el.dataset.v === "physical" ? "Games now look like their cases and cartridges" : "Plain box art");
       return renderSettings(`[data-do="look"][data-v="${el.dataset.v}"]`);
+    }
+    if (d === "bd") {
+      await R.setConfig({ backdrop: el.dataset.v });
+      document.documentElement.dataset.bd = el.dataset.v;
+      return renderSettings(`[data-do="bd"][data-v="${el.dataset.v}"]`);
     }
     if (d === "crt") {
       await R.setConfig({ crt: el.dataset.v });
