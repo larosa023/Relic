@@ -18,6 +18,7 @@ import shutil
 import tempfile
 import threading
 import time
+import urllib.parse
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -29,6 +30,7 @@ from version import VERSION
 BUILDBOT = os.environ.get("RELIC_BUILDBOT", "https://buildbot.libretro.com")
 GITHUB_API = os.environ.get("RELIC_GITHUB_API", "https://api.github.com")
 DOLPHIN_SITE = os.environ.get("RELIC_DOLPHIN_SITE", "https://dolphin-emu.org")
+RPCS3_API = os.environ.get("RELIC_RPCS3_API", "https://update.rpcs3.net")
 PLATFORM = "windows/x86_64"
 
 # Official releases of the standalone emulators: GitHub repo and which download is the Windows build.
@@ -62,13 +64,37 @@ def install_root() -> Path:
     return d
 
 
+# Emulator websites (dolphin-emu.org, rpcs3.net) turn away anything that doesn't look like a web browser.
+BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
+
 def _req(url: str, accept: str = "*/*"):
-    return urllib.request.Request(url, headers={"User-Agent": f"Relic/{VERSION}", "Accept": accept})
+    host = urllib.parse.urlsplit(url).hostname or ""
+    github = host.endswith("github.com") or host.endswith("githubusercontent.com") or host.endswith("libretro.com")
+    ua = f"Relic/{VERSION}" if github else BROWSER_UA
+    return urllib.request.Request(url, headers={"User-Agent": ua, "Accept": accept, "Accept-Language": "en-US,en;q=0.9"})
 
 
-def _get_text(url: str) -> str:
-    with urllib.request.urlopen(_req(url), timeout=20) as r:
+def _get_text(url: str, accept: str = "*/*") -> str:
+    with urllib.request.urlopen(_req(url, accept), timeout=20) as r:
         return r.read().decode("utf-8", "replace")
+
+
+def _why(e: Exception, what: str = "the download") -> str:
+    """A failed download, in words: which site, and what it said."""
+    import urllib.error
+    url = getattr(e, "url", None) or getattr(e, "filename", None) or ""
+    host = urllib.parse.urlsplit(url).hostname or ""
+    if isinstance(e, urllib.error.HTTPError):
+        site = host or "the site"
+        if e.code == 403:
+            return f"{site} turned down {what} (403)."
+        if e.code == 404:
+            return f"{site} doesn't have {what} where Relic looked (404)."
+        if e.code == 429:
+            return f"{site} says too many requests. Wait a few minutes and try again."
+        return f"{site} answered with an error ({e.code})."
+    return "Couldn't connect. Check your internet connection and try again."
 
 
 def _safe_extract(archive: Path, dest: Path) -> None:
@@ -202,8 +228,14 @@ class Setup:
             self._set(busy=False, done=True, phase="Ready", progress=1.0)
         except Exception as e:
             log.exception("setup failed")
-            msg = str(e) if isinstance(e, RuntimeError) else f"Download failed ({type(e).__name__}). Check your internet connection and try again."
-            self._set(busy=False, error=msg, phase="")
+            msg = str(e) if isinstance(e, RuntimeError) else _why(e)
+            # For an emulator, say where to get it by hand: the page opens from the dialog.
+            emu = next((st for st in steps if st["kind"] == "standalone"), None)
+            extra = {}
+            if emu:
+                info = standalone.EMULATORS[standalone.key(emu["id"])]
+                extra = {"sid": standalone.key(emu["id"]), "page": info.get("page", ""), "emu": info["name"]}
+            self._set(busy=False, error=msg, phase="", **extra)
 
     def _download(self, url: str, label: str) -> Path:
         self._set(phase=f"Downloading {label}", progress=0.0)
@@ -301,12 +333,59 @@ class Setup:
     # ------------------------------------------------------------- standalone emulators
     def _dolphin_url(self) -> tuple[str, str]:
         """The newest stable Dolphin for 64-bit Windows, from the download page on dolphin-emu.org."""
-        page = _get_text(f"{DOLPHIN_SITE}/download/")
+        page = _get_text(f"{DOLPHIN_SITE}/download/", "text/html,application/xhtml+xml,*/*;q=0.8")
         links = re.findall(r'https://dl\.dolphin-emu\.org/releases/[^"\'<>\s]+/dolphin-[^"\'<>\s]+-x64\.7z', page)
         if not links:
             raise RuntimeError("Couldn't find a Dolphin download. Get it from dolphin-emu.org, then choose it in Settings.")
         url = links[0]
         return url, url.rsplit("/", 2)[-2]
+
+    def _rpcs3_url(self) -> tuple[str, str] | None:
+        """RPCS3's own update service (what its built-in updater uses): the newest Windows x64 build."""
+        try:
+            data = json.loads(_get_text(f"{RPCS3_API}/?api=v2&c=0000000", "application/json"))
+        except Exception as e:
+            log.info("RPCS3 update service: %s", e)
+            return None
+        latest = data.get("latest_build") or {}
+        found = []
+
+        def walk(o, path=""):
+            if isinstance(o, dict):
+                for k, v in o.items():
+                    walk(v, f"{path}/{k}".lower())
+            elif isinstance(o, str) and o.startswith("https://") and re.search(r"\.(7z|zip)$", o, re.I):
+                found.append((path, o))
+        walk(latest)
+        win = [u for p, u in found if "win" in (p + u).lower() and "arm" not in (p + u).lower()]
+        if not win:
+            return None
+        return win[0], str(latest.get("version") or "")
+
+    def _github_asset(self, repo: str, pattern: str, name: str, sid: str) -> tuple[str, str]:
+        """The Windows x64 download from a project's GitHub releases (newest first, pre-releases too)."""
+        def pick(rel):
+            for a in rel.get("assets", []):
+                n = a["name"]
+                if re.search(pattern, n, re.I) and not re.search(r"arm64|aarch64|debug|symbols|pdb", n, re.I):
+                    return a["browser_download_url"], rel.get("tag_name", "")
+            return None
+        try:
+            hit = pick(json.loads(_get_text(f"{GITHUB_API}/repos/{repo}/releases/latest", "application/vnd.github+json")))
+            if hit:
+                return hit
+        except Exception as e:  # some projects only publish pre-releases, so there's no "latest"
+            log.info("%s: no latest release (%s), checking the release list", repo, e)
+        try:
+            rels = json.loads(_get_text(f"{GITHUB_API}/repos/{repo}/releases?per_page=15", "application/vnd.github+json"))
+        except Exception as e:
+            raise RuntimeError(_why(e, f"the {name} download"))
+        for rel in rels:
+            if not rel.get("draft"):
+                hit = pick(rel)
+                if hit:
+                    return hit
+        raise RuntimeError(f"Couldn't find a Windows download of {name}.")
 
     def install_standalone(self, sid: str) -> None:
         sid = standalone.key(sid)
@@ -317,11 +396,8 @@ class Setup:
             url, tag = self._dolphin_url()
             archive = self._download(url, f"{name} {tag}")
         else:
-            data = json.loads(_get_text(f"{GITHUB_API}/repos/{repo}/releases/latest"))
-            assets = [a for a in data.get("assets", []) if re.search(pattern, a["name"], re.I)]
-            if not assets:
-                raise RuntimeError(f"Couldn't find a Windows download of {name}. Get it from {standalone.EMULATORS[sid]['site']}.")
-            archive = self._download(assets[0]["browser_download_url"], f"{name} {data.get('tag_name', '')}".strip())
+            url, tag = (self._rpcs3_url() if sid == "ps3" else None) or self._github_asset(repo, pattern, name, sid)
+            archive = self._download(url, f"{name} {tag}".strip())
         self._set(phase=f"Installing {name}", progress=None)
         dest = install_root() / "Emulators" / name.replace(" ", "")
         try:

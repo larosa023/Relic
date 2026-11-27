@@ -18,27 +18,27 @@ IS_WIN = sys.platform == "win32"
 
 # system id -> how to find and start its emulator. "{game}" in args is the game's path.
 EMULATORS = {
-    "ps4": {"name": "shadPS4", "site": "shadps4.net",
+    "ps4": {"name": "shadPS4", "site": "shadps4.net", "page": "https://shadps4.net/",
             "exe": ["shadPS4.exe", "shadps4.exe", "shadPS4QtLauncher.exe"], "dirs": ["shadPS4", "shadps4"],
             "args": ["-g", "{game}"], "fullscreen": ["--fullscreen", "true"]},
-    "ps3": {"name": "RPCS3", "site": "rpcs3.net",
+    "ps3": {"name": "RPCS3", "site": "rpcs3.net", "page": "https://rpcs3.net/download",
             "exe": ["rpcs3.exe"], "dirs": ["RPCS3", "rpcs3"],
             "args": ["--no-gui", "{game}"], "fullscreen": ["--fullscreen"]},
     "switch": {"name": "Ryujinx", "site": "the Ryujinx project's releases page",
                "exe": ["Ryujinx.exe", "Ryujinx.Ava.exe"], "dirs": ["Ryujinx", "ryujinx", "publish"],
                "args": ["{game}"], "fullscreen": ["--fullscreen"]},
-    "wiiu": {"name": "Cemu", "site": "cemu.info",
+    "wiiu": {"name": "Cemu", "site": "cemu.info", "page": "https://cemu.info/",
              "exe": ["Cemu.exe", "cemu.exe"], "dirs": ["Cemu", "cemu"],
              "args": ["-g", "{game}"], "fullscreen": ["-f"]},
-    "xbox": {"name": "xemu", "site": "xemu.app",
+    "xbox": {"name": "xemu", "site": "xemu.app", "page": "https://xemu.app/",
              "exe": ["xemu.exe"], "dirs": ["xemu"],
              "args": ["-dvd_path", "{game}"], "fullscreen": ["-full-screen"]},
     # GameCube and Wii share one Dolphin. Used instead of RetroArch's (older) Dolphin core unless you turn
     # that off in Settings; it's faster and opens every format (RVZ, WIA, GCZ, WBFS).
-    "gamecube": {"name": "Dolphin", "site": "dolphin-emu.org",
+    "gamecube": {"name": "Dolphin", "site": "dolphin-emu.org", "page": "https://dolphin-emu.org/download/",
                  "exe": ["Dolphin.exe", "dolphin.exe"], "dirs": ["Dolphin", "dolphin"],
                  "args": ["-b", "-e", "{game}"], "fullscreen": ["-C", "Dolphin.Display.Fullscreen=True"]},
-    "xbox360": {"name": "Xenia Canary", "site": "xenia.jp",
+    "xbox360": {"name": "Xenia Canary", "site": "xenia.jp", "page": "https://xenia.jp/",
                 "exe": ["xenia_canary.exe", "xenia.exe"], "dirs": ["xenia", "xenia_canary", "Xenia"],
                 "args": ["{game}"], "fullscreen": ["--fullscreen=true"]},
 }

@@ -358,6 +358,15 @@ class Handler(BaseHTTPRequestHandler):
             if not c.setup.start([{"kind": kind, "label": "Controller profiles" if kind == "autoconfig" else "CRT shaders"}]):
                 raise RuntimeError("Already setting something up")
             return self._json({"ok": True} | c.setup.snapshot())
+        if act == "open_page":
+            # Only the emulators' own download pages, opened in your web browser.
+            info = standalone.EMULATORS.get(standalone.key(str(body.get("sid", ""))))
+            page = (info or {}).get("page", "")
+            if not page.startswith("https://"):
+                raise RuntimeError("No download page for that one")
+            import webbrowser
+            webbrowser.open(page)
+            return self._json({"ok": True})
         if act == "open_bios":
             g = c.library.get(str(body.get("id", "")))
             b = c.setup.missing_bios(g["system"]) if g else None

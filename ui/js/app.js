@@ -646,7 +646,9 @@ function renderProgress(st) {
     <div class="bar${pct == null ? " busy" : ""}"><i style="width:${pct == null ? 35 : pct}%"></i></div>
     <p class="setup-p dim">You can close this; it keeps going.</p>`;
 }
+let lastSetup = null, setupFail = null;
 async function runSetup(body, title, then) {
+  lastSetup = [body, title, then];
   setupAuto = true;
   try {
     const st = await R.api("/api/setup", body);
@@ -661,7 +663,11 @@ async function runSetup(body, title, then) {
     clearInterval(setupPoll);
     await loadState(); await loadLibrary();
     if (st.error) {
-      if (setupOpen()) showSetup("Setup", "That didn't work", `<p class="setup-p">${esc(st.error)}</p>`, [["setup-retry", "Try again"], ["setup-close", "Close"]]);
+      setupFail = st;
+      const manual = st.sid ? `<p class="setup-p dim">You can also get ${esc(st.emu)} yourself: open its download page, unzip what you download anywhere you like (for example Documents\\Emulators), then choose its .exe here.</p>` : "";
+      if (setupOpen()) showSetup("Setup", "That didn't work", `<p class="setup-p">${esc(st.error)}</p>${manual}`,
+        [["setup-again", "Try again"], ...(st.page ? [["setup-page", "Open the download page"]] : []),
+         ...(st.sid ? [["setup-pick", "I've downloaded it: choose it…"]] : []), ["setup-close", "Close"]]);
       else R.toast(st.error, true);
       return;
     }
@@ -1129,6 +1135,25 @@ async function doAction(el) {
     if (d === "install-ra") { setupGame = null; return runSetup({ action: "retroarch" }, "Setting up RetroArch", () => { closeSetup(); R.toast("RetroArch is ready"); renderSettings('[data-do="pick-ra"]'); }); }
     if (d === "install-emu") { setupGame = null; const sid = el.dataset.sid; return runSetup({ action: "standalone", sid }, "Downloading the emulator", () => { closeSetup(); R.toast("Emulator ready"); renderSettings(`[data-sid="${sid}"]`); }); }
     if (d === "remap") return remap(el.dataset.act);
+    if (d === "setup-again") return lastSetup ? runSetup(...lastSetup) : closeSetup();
+    if (d === "setup-page") {
+      await R.api("/api/setup", { action: "open_page", sid: setupFail.sid });
+      return R.toast("Opened the download page in your browser");
+    }
+    if (d === "setup-pick") {
+      const sid = setupFail.sid, g = setupGame;
+      const api = R.native();
+      const p = api ? await api.pick_file("exe") : (window.prompt("Path to the emulator's .exe:") || "").trim();
+      if (!p) return;
+      await R.setConfig({ emulators: { ...(S.config.emulators || {}), [sid]: p } });
+      await loadState();
+      const e = (S.emulators || []).find((x) => x.id === sid);
+      if (!(e && e.exe)) return R.toast("That doesn't look like the right program", true);
+      closeSetup();
+      R.toast(`Using ${e.name} for ${e.system}`);
+      if (screen === "settings") renderSettings(`[data-sid="${sid}"]`);
+      return g ? launch(g) : null;
+    }
     if (d === "pick-emu") {
       const api = R.native();
       const p = api ? await api.pick_file("exe") : (window.prompt("Path to the emulator's .exe:") || "").trim();
